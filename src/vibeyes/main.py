@@ -10,7 +10,7 @@ import numpy as np
 
 from vibeyes import GazeRatio, Point
 from vibeyes.calibration import Calibration
-from vibeyes.camera import Camera, list_cameras, preview_camera
+from vibeyes.camera import Camera, list_cameras, select_camera_interactive
 from vibeyes.detector import Detector
 from vibeyes.face_tracker import FaceTracker
 from vibeyes.gaze_estimator import GazeEstimator
@@ -255,25 +255,10 @@ def main():
             sys.exit(1)
         elif len(cameras) == 1:
             camera_device = cameras[0]["index"]
-            print(f"Using camera: {cameras[0]['name']}")
+            print(f"Using camera {camera_device}")
         else:
-            print("Multiple cameras found:")
-            for cam in cameras:
-                print(f"  [{cam['index']}] {cam['name']}")
-            while True:
-                try:
-                    choice = input(f"Select camera [0-{len(cameras) - 1}]: ").strip()
-                    camera_device = int(choice)
-                    if 0 <= camera_device < len(cameras):
-                        print(f"Showing preview for camera {camera_device}...")
-                        if preview_camera(camera_device):
-                            break
-                        else:
-                            print("Rejected. Pick another camera.")
-                            continue
-                    print(f"Please enter a number between 0 and {len(cameras) - 1}")
-                except (ValueError, EOFError):
-                    print("Invalid input. Please enter a number.")
+            print(f"Found {len(cameras)} cameras. Showing preview of each...")
+            camera_device = select_camera_interactive(cameras)
 
     model_path = os.path.abspath(args.model)
     if not os.path.exists(model_path):

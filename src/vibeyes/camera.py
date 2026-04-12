@@ -76,63 +76,67 @@ def _request_camera_permission():
 
 
 def list_cameras() -> list[dict]:
-    """List available cameras with their names and OpenCV indices.
-
-    Probes OpenCV indices to find working cameras, then tries to get
-    names from AVFoundation. OpenCV indices are used for actual capture.
-    """
-    # Get AVFoundation names if available (for display only)
-    avf_names = {}
-    if sys.platform == "darwin":
-        try:
-            import AVFoundation
-            devices = AVFoundation.AVCaptureDevice.devicesWithMediaType_(
-                AVFoundation.AVMediaTypeVideo
-            )
-            for i, device in enumerate(devices):
-                avf_names[i] = str(device.localizedName())
-        except ImportError:
-            pass
-
-    # Probe OpenCV indices -- these are the actual indices used for capture
+    """List available cameras by probing OpenCV indices."""
     cameras = []
     for i in range(5):
         cap = cv2.VideoCapture(i)
         if cap.isOpened():
-            name = avf_names.get(i, f"Camera {i}")
-            cameras.append({"index": i, "name": name, "unique_id": ""})
+            cameras.append({"index": i, "name": f"Camera {i}"})
             cap.release()
-
     return cameras
 
 
-def preview_camera(device: int, duration_sec: float = 3.0):
-    """Show a brief camera preview so the user can verify it's the right one."""
-    cap = cv2.VideoCapture(device)
-    if not cap.isOpened():
-        print(f"Cannot open camera {device} for preview.")
-        return
+def select_camera_interactive(cameras: list[dict]) -> int:
+    """Cycle through cameras with live preview. User picks visually.
 
-    print(f"Previewing camera {device} for {duration_sec:.0f}s... (press any key to accept, ESC to reject)")
-    cv2.namedWindow("Camera Preview", cv2.WINDOW_NORMAL)
-    start = time.time()
-    accepted = True
+    For each camera, shows a live preview window. User presses:
+      SPACE/ENTER = accept this camera
+      N = next camera
+      ESC = abort
+    Returns the selected OpenCV device index.
+    """
+    for cam in cameras:
+        idx = cam["index"]
+        cap = cv2.VideoCapture(idx)
+        if not cap.isOpened():
+            continue
 
-    while time.time() - start < duration_sec:
-        ret, frame = cap.read()
-        if ret:
-            cv2.imshow("Camera Preview", frame)
-        key = cv2.waitKey(1) & 0xFF
-        if key == 27:  # ESC
-            accepted = False
-            break
-        elif key != 255:  # any other key
-            break
+        title = f"Camera {idx} -- SPACE to use, N for next, ESC to quit"
+        cv2.namedWindow(title, cv2.WINDOW_NORMAL)
 
-    cv2.destroyAllWindows()
-    cv2.waitKey(1)
-    cap.release()
-    return accepted
+        selected = None
+        while selected is None:
+            ret, frame = cap.read()
+            if ret:
+                # Add label on frame
+                cv2.putText(
+                    frame, f"Camera {idx} - Press SPACE to select, N for next",
+                    (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2,
+                )
+                cv2.imshow(title, frame)
+
+            key = cv2.waitKey(1) & 0xFF
+            if key in (ord(" "), 13):  # SPACE or ENTER
+                selected = True
+            elif key in (ord("n"), ord("N")):
+                selected = False
+            elif key == 27:  # ESC
+                cv2.destroyAllWindows()
+                cv2.waitKey(1)
+                cap.release()
+                print("Camera selection aborted.")
+                sys.exit(1)
+
+        cv2.destroyAllWindows()
+        cv2.waitKey(1)
+        cap.release()
+
+        if selected:
+            print(f"Selected camera {idx}")
+            return idx
+
+    # Shouldn't reach here, but fallback to first camera
+    return cameras[0]["index"]
 
 
 class Camera:
