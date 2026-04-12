@@ -75,6 +75,40 @@ def _request_camera_permission():
         pass
 
 
+def list_cameras() -> list[dict]:
+    """List available cameras with their names and indices.
+
+    Uses AVFoundation on macOS for camera names, falls back to probing OpenCV indices.
+    """
+    cameras = []
+
+    if sys.platform == "darwin":
+        try:
+            import AVFoundation
+
+            devices = AVFoundation.AVCaptureDevice.devicesWithMediaType_(
+                AVFoundation.AVMediaTypeVideo
+            )
+            for i, device in enumerate(devices):
+                cameras.append({
+                    "index": i,
+                    "name": str(device.localizedName()),
+                    "unique_id": str(device.uniqueID()),
+                })
+            return cameras
+        except ImportError:
+            pass
+
+    # Fallback: probe OpenCV indices 0-4
+    for i in range(5):
+        cap = cv2.VideoCapture(i)
+        if cap.isOpened():
+            cameras.append({"index": i, "name": f"Camera {i}", "unique_id": ""})
+            cap.release()
+
+    return cameras
+
+
 class Camera:
     """Captures frames from a webcam using OpenCV."""
 

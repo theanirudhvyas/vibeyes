@@ -10,7 +10,7 @@ import numpy as np
 
 from vibeyes import GazeRatio, Point
 from vibeyes.calibration import Calibration
-from vibeyes.camera import Camera
+from vibeyes.camera import Camera, list_cameras
 from vibeyes.detector import Detector
 from vibeyes.face_tracker import FaceTracker
 from vibeyes.gaze_estimator import GazeEstimator
@@ -30,11 +30,11 @@ def get_screen_size() -> tuple[int, int]:
         return 1920, 1080
 
 
-def run_calibration(face_tracker: FaceTracker, gaze_estimator: GazeEstimator) -> Calibration:
+def run_calibration(face_tracker: FaceTracker, gaze_estimator: GazeEstimator, camera_device: int = 0) -> Calibration:
     """Run 9-point calibration using OpenCV windows."""
     screen_w, screen_h = get_screen_size()
     calibration = Calibration()
-    camera = Camera()
+    camera = Camera(device=camera_device)
 
     # Warm up camera -- first few frames are often black/green
     print("Warming up camera...")
@@ -138,9 +138,9 @@ def run_calibration(face_tracker: FaceTracker, gaze_estimator: GazeEstimator) ->
     return calibration
 
 
-def run_tracking(detector: Detector):
+def run_tracking(detector: Detector, camera_device: int = 0):
     """Run continuous gaze tracking, printing detected window to terminal."""
-    camera = Camera()
+    camera = Camera(device=camera_device)
     last_window = None
     fps_counter = 0
     fps_start = time.time()
@@ -189,7 +189,44 @@ def main():
     parser.add_argument("--calibrate", action="store_true", help="Run calibration")
     parser.add_argument("--model", default=MODEL_PATH, help="Path to face_landmarker.task model")
     parser.add_argument("--smoothing", type=float, default=0.4, help="Gaze smoothing factor (0-1)")
+    parser.add_argument("--camera", type=int, default=None, help="Camera device index (use --list-cameras to see available)")
+    parser.add_argument("--list-cameras", action="store_true", help="List available cameras and exit")
     args = parser.parse_args()
+
+    if args.list_cameras:
+        cameras = list_cameras()
+        if not cameras:
+            print("No cameras found.")
+        else:
+            print("Available cameras:")
+            for cam in cameras:
+                print(f"  [{cam['index']}] {cam['name']}")
+        sys.exit(0)
+
+    # Camera selection
+    if args.camera is not None:
+        camera_device = args.camera
+    else:
+        cameras = list_cameras()
+        if len(cameras) == 0:
+            print("Error: No cameras found.")
+            sys.exit(1)
+        elif len(cameras) == 1:
+            camera_device = cameras[0]["index"]
+            print(f"Using camera: {cameras[0]['name']}")
+        else:
+            print("Multiple cameras found:")
+            for cam in cameras:
+                print(f"  [{cam['index']}] {cam['name']}")
+            while True:
+                try:
+                    choice = input(f"Select camera [0-{len(cameras) - 1}]: ").strip()
+                    camera_device = int(choice)
+                    if 0 <= camera_device < len(cameras):
+                        break
+                    print(f"Please enter a number between 0 and {len(cameras) - 1}")
+                except (ValueError, EOFError):
+                    print("Invalid input. Please enter a number.")
 
     model_path = os.path.abspath(args.model)
     if not os.path.exists(model_path):
@@ -204,7 +241,7 @@ def main():
 
     if args.calibrate:
         print("Starting calibration...")
-        calibration = run_calibration(face_tracker, gaze_estimator)
+        calibration = run_calibration(face_tracker, gaze_estimator, camera_device=camera_device)
     else:
         if os.path.exists(CALIBRATION_PATH):
             print(f"Loading calibration from {CALIBRATION_PATH}")
@@ -221,7 +258,7 @@ def main():
         get_windows=lambda: get_visible_windows(exclude_app="Python"),
     )
 
-    run_tracking(detector)
+    run_tracking(detector, camera_device=camera_device)
     face_tracker.close()
 
 
