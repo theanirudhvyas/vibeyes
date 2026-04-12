@@ -143,10 +143,16 @@ def run_calibration(face_tracker: FaceTracker, gaze_estimator: GazeEstimator, ca
     return calibration
 
 
-def run_tracking(detector: Detector, camera_device: int = 0):
-    """Run continuous gaze tracking, printing detected window to terminal."""
+def run_tracking(detector: Detector, camera_device: int = 0, dwell_time: float = 0.5):
+    """Run continuous gaze tracking, printing detected window to terminal.
+
+    dwell_time: seconds the gaze must stay on a new target before switching (hysteresis).
+    """
     camera = Camera(device=camera_device)
-    last_label = None
+    confirmed_label = None  # the label we've committed to displaying
+    candidate_label = None  # a new label we're considering switching to
+    candidate_since = 0.0   # when we first saw the candidate
+
     fps_counter = 0
     fps_start = time.time()
 
@@ -154,7 +160,7 @@ def run_tracking(detector: Detector, camera_device: int = 0):
     zellij_panes = None
     zellij_layout_time = 0
 
-    print("\nTracking started. Press Ctrl+C to stop.\n")
+    print(f"\nTracking started (dwell={dwell_time}s). Press Ctrl+C to stop.\n")
 
     try:
         while True:
@@ -179,46 +185,59 @@ def run_tracking(detector: Detector, camera_device: int = 0):
                 fps = 0
 
             if window is None:
-                if last_label is not None:
-                    print("  Looking at: (nothing detected)")
-                    last_label = None
-                continue
+                # Require dwell to switch to "nothing"
+                raw_label = None
+            else:
+                label = f"{window.app_name}: {window.title}" if window.title else window.app_name
+                pane_label = ""
 
-            label = f"{window.app_name}: {window.title}" if window.title else window.app_name
-            pane_label = ""
+                # If the window is a terminal, try to detect zellij pane
+                if window.app_name in TERMINAL_APPS:
+                    # Refresh zellij layout every 2 seconds
+                    if now - zellij_layout_time > 2.0:
+                        layout = get_zellij_layout()
+                        if layout:
+                            zellij_panes = parse_active_tab_panes(layout)
+                        else:
+                            zellij_panes = None
+                        zellij_layout_time = now
 
-            # If the window is a terminal, try to detect zellij pane
-            if window.app_name in TERMINAL_APPS:
-                # Refresh zellij layout every 2 seconds
-                if now - zellij_layout_time > 2.0:
-                    layout = get_zellij_layout()
-                    if layout:
-                        zellij_panes = parse_active_tab_panes(layout)
+                    if zellij_panes:
+                        screen_point = detector.last_screen_point
+                        if screen_point:
+                            wx, wy, ww, wh = window.bounds
+                            pane = hit_test_pane(
+                                screen_point.x, screen_point.y,
+                                zellij_panes,
+                                window_x=wx, window_y=wy,
+                                window_w=ww, window_h=wh,
+                            )
+                            if pane:
+                                pane_cmd = pane.command.split("/")[-1]  # basename
+                                pane_label = f" > pane: {pane_cmd}"
+                                if pane.cwd:
+                                    pane_cwd = pane.cwd.split("/")[-1]
+                                    pane_label += f" ({pane_cwd})"
+
+                raw_label = label + pane_label
+
+            # Dwell-time hysteresis: only switch if new target is stable
+            if raw_label == confirmed_label:
+                # Still on same target -- reset candidate
+                candidate_label = None
+            elif raw_label == candidate_label:
+                # Candidate is consistent -- check dwell time
+                if now - candidate_since >= dwell_time:
+                    confirmed_label = candidate_label
+                    candidate_label = None
+                    if confirmed_label:
+                        print(f"  Looking at: {confirmed_label}" + (f"  ({fps:.0f} fps)" if fps > 0 else ""))
                     else:
-                        zellij_panes = None
-                    zellij_layout_time = now
-
-                if zellij_panes:
-                    screen_point = detector.last_screen_point
-                    if screen_point:
-                        wx, wy, ww, wh = window.bounds
-                        pane = hit_test_pane(
-                            screen_point.x, screen_point.y,
-                            zellij_panes,
-                            window_x=wx, window_y=wy,
-                            window_w=ww, window_h=wh,
-                        )
-                        if pane:
-                            pane_cmd = pane.command.split("/")[-1]  # basename
-                            pane_label = f" > pane: {pane_cmd}"
-                            if pane.cwd:
-                                pane_cwd = pane.cwd.split("/")[-1]
-                                pane_label += f" ({pane_cwd})"
-
-            full_label = label + pane_label
-            if full_label != last_label:
-                print(f"  Looking at: {full_label}" + (f"  ({fps:.0f} fps)" if fps > 0 else ""))
-                last_label = full_label
+                        print("  Looking at: (nothing detected)")
+            else:
+                # New candidate -- start timing
+                candidate_label = raw_label
+                candidate_since = now
 
     except KeyboardInterrupt:
         print("\nStopped.")
@@ -232,6 +251,7 @@ def main():
     parser.add_argument("--model", default=MODEL_PATH, help="Path to face_landmarker.task model")
     parser.add_argument("--smoothing", type=float, default=0.4, help="Gaze smoothing factor (0-1)")
     parser.add_argument("--camera", type=int, default=None, help="Camera device index (use --list-cameras to see available)")
+    parser.add_argument("--dwell", type=float, default=0.5, help="Seconds gaze must stay on new target before switching (default 0.5)")
     parser.add_argument("--list-cameras", action="store_true", help="List available cameras and exit")
     args = parser.parse_args()
 
@@ -290,7 +310,7 @@ def main():
         get_windows=lambda: get_visible_windows(exclude_app="Python"),
     )
 
-    run_tracking(detector, camera_device=camera_device)
+    run_tracking(detector, camera_device=camera_device, dwell_time=args.dwell)
     face_tracker.close()
 
 
