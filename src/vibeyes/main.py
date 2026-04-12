@@ -143,10 +143,11 @@ def run_calibration(face_tracker: FaceTracker, gaze_estimator: GazeEstimator, ca
     return calibration
 
 
-def run_tracking(detector: Detector, camera_device: int = 0, dwell_time: float = 0.5):
+def run_tracking(detector: Detector, camera_device: int = 0, dwell_time: float = 0.5, show_overlay: bool = False):
     """Run continuous gaze tracking, printing detected window to terminal.
 
     dwell_time: seconds the gaze must stay on a new target before switching (hysteresis).
+    show_overlay: if True, show a transparent dot on screen where gaze is estimated.
     """
     camera = Camera(device=camera_device)
     confirmed_label = None  # the label we've committed to displaying
@@ -155,6 +156,17 @@ def run_tracking(detector: Detector, camera_device: int = 0, dwell_time: float =
 
     fps_counter = 0
     fps_start = time.time()
+
+    # Gaze overlay
+    overlay = None
+    if show_overlay:
+        try:
+            from vibeyes.overlay import GazeOverlay
+            overlay = GazeOverlay()
+            overlay.start()
+            print("Gaze overlay enabled (red dot on screen)")
+        except Exception as e:
+            print(f"Could not start overlay: {e}")
 
     # Cache zellij layout (refresh periodically)
     zellij_panes = None
@@ -173,6 +185,10 @@ def run_tracking(detector: Detector, camera_device: int = 0, dwell_time: float =
             except RuntimeError as e:
                 print(f"Error: {e}")
                 break
+
+            # Update overlay with raw gaze position (before hysteresis)
+            if overlay and detector.last_screen_point:
+                overlay.update(detector.last_screen_point.x, detector.last_screen_point.y)
 
             fps_counter += 1
             now = time.time()
@@ -242,6 +258,8 @@ def run_tracking(detector: Detector, camera_device: int = 0, dwell_time: float =
     except KeyboardInterrupt:
         print("\nStopped.")
     finally:
+        if overlay:
+            overlay.stop()
         camera.release()
 
 
@@ -252,6 +270,7 @@ def main():
     parser.add_argument("--smoothing", type=float, default=0.4, help="Gaze smoothing factor (0-1)")
     parser.add_argument("--camera", type=int, default=None, help="Camera device index (use --list-cameras to see available)")
     parser.add_argument("--dwell", type=float, default=0.5, help="Seconds gaze must stay on new target before switching (default 0.5)")
+    parser.add_argument("--overlay", action="store_true", help="Show a red dot overlay where gaze is estimated")
     parser.add_argument("--list-cameras", action="store_true", help="List available cameras and exit")
     args = parser.parse_args()
 
@@ -310,7 +329,7 @@ def main():
         get_windows=lambda: get_visible_windows(exclude_app="Python"),
     )
 
-    run_tracking(detector, camera_device=camera_device, dwell_time=args.dwell)
+    run_tracking(detector, camera_device=camera_device, dwell_time=args.dwell, show_overlay=args.overlay)
     face_tracker.close()
 
 
