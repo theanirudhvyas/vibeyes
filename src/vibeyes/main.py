@@ -126,6 +126,7 @@ def run_calibration(face_tracker: FaceTracker, gaze_estimator: GazeEstimator, ca
         print(f"  Point {i + 1}: gaze=({median_x:.3f}, {median_y:.3f}) -> screen=({sx}, {sy})")
 
     cv2.destroyAllWindows()
+    cv2.waitKey(1)
     camera.release()
 
     if calibration.point_count < 6:
