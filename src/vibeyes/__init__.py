@@ -25,13 +25,20 @@ class FaceData:
     """Extracted face tracking data for gaze estimation."""
     left_eye: EyeData
     right_eye: EyeData
+    nose_tip: Point  # face center reference for head pose signal
 
 
 @dataclass
 class GazeRatio:
-    """Normalized gaze direction (0-1 range). (0,0) = top-left, (1,1) = bottom-right."""
-    x: float
-    y: float
+    """Gaze features for calibration mapping.
+
+    iris_x, iris_y: iris position ratio within eye (0-1)
+    head_x, head_y: nose tip position in frame (0-1), captures head pose
+    """
+    x: float  # combined/primary x signal
+    y: float  # combined/primary y signal
+    head_x: float = 0.5  # nose x position (head pose)
+    head_y: float = 0.5  # nose y position (head pose)
 
 
 @dataclass

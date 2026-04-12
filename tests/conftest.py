@@ -42,6 +42,7 @@ def mock_face_data():
             top=Point(0.3, 0.45),
             bottom=Point(0.3, 0.55),
         ),
+        nose_tip=Point(0.5, 0.5),
     )
 
 
@@ -63,6 +64,7 @@ def mock_face_data_looking_left():
             top=Point(0.3, 0.45),
             bottom=Point(0.3, 0.55),
         ),
+        nose_tip=Point(0.55, 0.5),
     )
 
 
@@ -84,6 +86,7 @@ def mock_face_data_looking_right():
             top=Point(0.3, 0.45),
             bottom=Point(0.3, 0.55),
         ),
+        nose_tip=Point(0.45, 0.5),
     )
 
 

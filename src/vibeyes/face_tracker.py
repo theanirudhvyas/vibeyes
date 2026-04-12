@@ -22,6 +22,9 @@ RIGHT_EYE_OUTER_CORNER = 33
 RIGHT_EYE_TOP = 159
 RIGHT_EYE_BOTTOM = 145
 
+# Nose tip for head pose signal
+NOSE_TIP = 1
+
 
 class FaceTracker:
     """Detects face and iris landmarks from video frames using MediaPipe FaceLandmarker."""
@@ -65,7 +68,7 @@ class FaceTracker:
             bottom=_point(RIGHT_EYE_BOTTOM),
         )
 
-        return FaceData(left_eye=left_eye, right_eye=right_eye)
+        return FaceData(left_eye=left_eye, right_eye=right_eye, nose_tip=_point(NOSE_TIP))
 
     def close(self):
         """Release the landmarker resources."""

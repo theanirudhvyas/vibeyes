@@ -47,6 +47,7 @@ class TestGazeEstimator:
                 top=Point(0.3, 0.45),
                 bottom=Point(0.3, 0.55),
             ),
+            nose_tip=Point(0.5, 0.5),
         )
         estimator = GazeEstimator()
         ratio = estimator.estimate(face_data)
@@ -73,6 +74,7 @@ class TestGazeEstimator:
                 top=Point(0.3, 0.45),
                 bottom=Point(0.3, 0.55),
             ),
+            nose_tip=Point(0.5, 0.5),
         )
         estimator = GazeEstimator()
         ratio = estimator.estimate(face_data)
@@ -98,6 +100,7 @@ class TestGazeEstimator:
                 top=Point(0.3, 0.45),
                 bottom=Point(0.3, 0.55),
             ),
+            nose_tip=Point(0.5, 0.5),
         )
         r1 = estimator.estimate(center_face)
 
@@ -117,6 +120,7 @@ class TestGazeEstimator:
                 top=Point(0.3, 0.45),
                 bottom=Point(0.3, 0.55),
             ),
+            nose_tip=Point(0.5, 0.5),
         )
         r2 = estimator.estimate(right_face)
 
@@ -143,6 +147,7 @@ class TestGazeEstimator:
                 top=Point(0.3, 0.45),
                 bottom=Point(0.3, 0.55),
             ),
+            nose_tip=Point(0.5, 0.5),
         )
         ratio = estimator.estimate(center_face)
         assert abs(ratio.x - 0.5) < 0.05
