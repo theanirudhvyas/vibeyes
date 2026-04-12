@@ -36,6 +36,12 @@ def run_calibration(face_tracker: FaceTracker, gaze_estimator: GazeEstimator) ->
     calibration = Calibration()
     camera = Camera()
 
+    # Warm up camera -- first few frames are often black/green
+    print("Warming up camera...")
+    for _ in range(30):
+        camera.read()
+        time.sleep(0.03)
+
     # 3x3 grid of calibration points with 10% margin
     margin_x = int(screen_w * 0.1)
     margin_y = int(screen_h * 0.1)
@@ -50,47 +56,74 @@ def run_calibration(face_tracker: FaceTracker, gaze_estimator: GazeEstimator) ->
     cv2.setWindowProperty("VibEyes Calibration", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
 
     for i, (sx, sy) in enumerate(points):
-        # Draw calibration dot
-        canvas = np.zeros((screen_h, screen_w, 3), dtype=np.uint8)
-        cv2.circle(canvas, (sx, sy), 20, (0, 255, 0), -1)
-        cv2.circle(canvas, (sx, sy), 5, (255, 255, 255), -1)
-        cv2.putText(
-            canvas,
-            f"Look at the dot ({i + 1}/{len(points)}) - Press SPACE",
-            (screen_w // 2 - 250, screen_h - 50),
-            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (200, 200, 200), 2,
-        )
-        cv2.imshow("VibEyes Calibration", canvas)
-
-        # Wait for spacebar, collecting gaze samples
         samples = []
+        face_detected = False
+
         while True:
+            # Read camera frame
+            frame = camera.read()
+            if frame is not None:
+                face_data = face_tracker.detect(frame)
+                if face_data is not None:
+                    face_detected = True
+                    ratio = gaze_estimator.estimate(face_data)
+                    samples.append(ratio)
+                else:
+                    face_detected = False
+
+            # Draw calibration UI with live status
+            canvas = np.zeros((screen_h, screen_w, 3), dtype=np.uint8)
+
+            # Draw the target dot
+            cv2.circle(canvas, (sx, sy), 20, (0, 255, 0), -1)
+            cv2.circle(canvas, (sx, sy), 5, (255, 255, 255), -1)
+
+            # Show instructions
+            cv2.putText(
+                canvas,
+                f"Look at the green dot ({i + 1}/{len(points)}) then press SPACE",
+                (screen_w // 2 - 300, screen_h - 80),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (200, 200, 200), 2,
+            )
+
+            # Show face detection status
+            if face_detected:
+                status_color = (0, 255, 0)
+                status_text = f"Face detected - {len(samples)} samples"
+            else:
+                status_color = (0, 0, 255)
+                status_text = "No face detected - make sure camera can see your face"
+            cv2.putText(
+                canvas, status_text,
+                (screen_w // 2 - 300, screen_h - 40),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.6, status_color, 2,
+            )
+
+            # Show small camera preview in corner
+            if frame is not None:
+                preview = cv2.resize(frame, (160, 120))
+                canvas[10:130, screen_w - 170:screen_w - 10] = preview
+
+            cv2.imshow("VibEyes Calibration", canvas)
+
             key = cv2.waitKey(1) & 0xFF
-            if key == ord(" "):
+            if key == ord(" ") and len(samples) >= 3:
                 break
+            if key == ord(" ") and len(samples) < 3:
+                # Don't accept until we have enough samples
+                pass
             if key == 27:  # ESC to abort
                 cv2.destroyAllWindows()
                 camera.release()
                 print("Calibration aborted.")
                 sys.exit(1)
 
-            frame = camera.read()
-            if frame is None:
-                continue
-            face_data = face_tracker.detect(frame)
-            if face_data is not None:
-                ratio = gaze_estimator.estimate(face_data)
-                samples.append(ratio)
-
         # Use median of last N samples for stability
-        if len(samples) >= 3:
-            recent = samples[-10:]
-            median_x = sorted(s.x for s in recent)[len(recent) // 2]
-            median_y = sorted(s.y for s in recent)[len(recent) // 2]
-            calibration.add_point(GazeRatio(median_x, median_y), Point(sx, sy))
-            print(f"  Point {i + 1}: gaze=({median_x:.3f}, {median_y:.3f}) -> screen=({sx}, {sy})")
-        else:
-            print(f"  Point {i + 1}: not enough samples, skipping")
+        recent = samples[-15:]
+        median_x = sorted(s.x for s in recent)[len(recent) // 2]
+        median_y = sorted(s.y for s in recent)[len(recent) // 2]
+        calibration.add_point(GazeRatio(median_x, median_y), Point(sx, sy))
+        print(f"  Point {i + 1}: gaze=({median_x:.3f}, {median_y:.3f}) -> screen=({sx}, {sy})")
 
     cv2.destroyAllWindows()
     camera.release()
