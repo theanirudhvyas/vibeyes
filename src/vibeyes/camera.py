@@ -76,37 +76,63 @@ def _request_camera_permission():
 
 
 def list_cameras() -> list[dict]:
-    """List available cameras with their names and indices.
+    """List available cameras with their names and OpenCV indices.
 
-    Uses AVFoundation on macOS for camera names, falls back to probing OpenCV indices.
+    Probes OpenCV indices to find working cameras, then tries to get
+    names from AVFoundation. OpenCV indices are used for actual capture.
     """
-    cameras = []
-
+    # Get AVFoundation names if available (for display only)
+    avf_names = {}
     if sys.platform == "darwin":
         try:
             import AVFoundation
-
             devices = AVFoundation.AVCaptureDevice.devicesWithMediaType_(
                 AVFoundation.AVMediaTypeVideo
             )
             for i, device in enumerate(devices):
-                cameras.append({
-                    "index": i,
-                    "name": str(device.localizedName()),
-                    "unique_id": str(device.uniqueID()),
-                })
-            return cameras
+                avf_names[i] = str(device.localizedName())
         except ImportError:
             pass
 
-    # Fallback: probe OpenCV indices 0-4
+    # Probe OpenCV indices -- these are the actual indices used for capture
+    cameras = []
     for i in range(5):
         cap = cv2.VideoCapture(i)
         if cap.isOpened():
-            cameras.append({"index": i, "name": f"Camera {i}", "unique_id": ""})
+            name = avf_names.get(i, f"Camera {i}")
+            cameras.append({"index": i, "name": name, "unique_id": ""})
             cap.release()
 
     return cameras
+
+
+def preview_camera(device: int, duration_sec: float = 3.0):
+    """Show a brief camera preview so the user can verify it's the right one."""
+    cap = cv2.VideoCapture(device)
+    if not cap.isOpened():
+        print(f"Cannot open camera {device} for preview.")
+        return
+
+    print(f"Previewing camera {device} for {duration_sec:.0f}s... (press any key to accept, ESC to reject)")
+    cv2.namedWindow("Camera Preview", cv2.WINDOW_NORMAL)
+    start = time.time()
+    accepted = True
+
+    while time.time() - start < duration_sec:
+        ret, frame = cap.read()
+        if ret:
+            cv2.imshow("Camera Preview", frame)
+        key = cv2.waitKey(1) & 0xFF
+        if key == 27:  # ESC
+            accepted = False
+            break
+        elif key != 255:  # any other key
+            break
+
+    cv2.destroyAllWindows()
+    cv2.waitKey(1)
+    cap.release()
+    return accepted
 
 
 class Camera:

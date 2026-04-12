@@ -10,7 +10,7 @@ import numpy as np
 
 from vibeyes import GazeRatio, Point
 from vibeyes.calibration import Calibration
-from vibeyes.camera import Camera, list_cameras
+from vibeyes.camera import Camera, list_cameras, preview_camera
 from vibeyes.detector import Detector
 from vibeyes.face_tracker import FaceTracker
 from vibeyes.gaze_estimator import GazeEstimator
@@ -265,7 +265,12 @@ def main():
                     choice = input(f"Select camera [0-{len(cameras) - 1}]: ").strip()
                     camera_device = int(choice)
                     if 0 <= camera_device < len(cameras):
-                        break
+                        print(f"Showing preview for camera {camera_device}...")
+                        if preview_camera(camera_device):
+                            break
+                        else:
+                            print("Rejected. Pick another camera.")
+                            continue
                     print(f"Please enter a number between 0 and {len(cameras) - 1}")
                 except (ValueError, EOFError):
                     print("Invalid input. Please enter a number.")
