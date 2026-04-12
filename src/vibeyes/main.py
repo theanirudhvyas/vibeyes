@@ -269,7 +269,7 @@ def main():
     parser = argparse.ArgumentParser(description="VibEyes: Webcam gaze-to-window tracker")
     parser.add_argument("--calibrate", action="store_true", help="Run calibration")
     parser.add_argument("--model", default=MODEL_PATH, help="Path to face_landmarker.task model")
-    parser.add_argument("--smoothing", type=float, default=0.2, help="Gaze smoothing factor (0-1, lower=smoother, default 0.2)")
+    parser.add_argument("--smoothing", type=float, default=0.3, help="Gaze smoothing factor (0-1, lower=smoother, default 0.3)")
     parser.add_argument("--camera", type=int, default=None, help="Camera device index (use --list-cameras to see available)")
     parser.add_argument("--dwell", type=float, default=0.5, help="Seconds gaze must stay on new target before switching (default 0.5)")
     parser.add_argument("--overlay", action="store_true", help="Show a red dot overlay where gaze is estimated")
