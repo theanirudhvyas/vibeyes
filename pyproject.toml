@@ -1,0 +1,19 @@
+[project]
+name = "vibeyes"
+version = "0.1.0"
+description = "Webcam-based gaze tracking for window focus detection"
+requires-python = ">=3.12"
+dependencies = [
+    "mediapipe>=0.10.20",
+    "opencv-python>=4.8.0",
+    "numpy>=1.24.0",
+    "pyobjc-framework-Quartz>=10.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
