@@ -40,10 +40,7 @@ class FaceTracker:
 
     def detect(self, frame: np.ndarray) -> FaceData | None:
         """Detect face landmarks in a BGR frame. Returns FaceData or None if no face found."""
-        # Flip horizontally to selfie-mode so left/right eye landmarks have
-        # consistent x ordering (inner_corner.x < outer_corner.x for both eyes)
-        flipped = np.ascontiguousarray(frame[:, ::-1, :])
-        rgb = flipped[:, :, ::-1]  # BGR to RGB
+        rgb = frame[:, :, ::-1]  # BGR to RGB
         image = mp.Image(image_format=mp.ImageFormat.SRGB, data=np.ascontiguousarray(rgb))
         result = self._landmarker.detect(image)
 
