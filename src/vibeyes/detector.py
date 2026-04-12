@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from vibeyes import WindowInfo
+from vibeyes import Point, WindowInfo
 from vibeyes.window_tracker import hit_test
 
 
@@ -17,6 +17,7 @@ class Detector:
         self.gaze_estimator = gaze_estimator
         self.calibration = calibration
         self._get_windows = get_windows
+        self.last_screen_point: Point | None = None
 
     def detect(self, frame: np.ndarray) -> WindowInfo | None:
         """Run the full detection pipeline on a single frame.
@@ -38,6 +39,7 @@ class Detector:
 
         # Step 4: Map to screen coordinates
         screen_point = self.calibration.predict(gaze_ratio)
+        self.last_screen_point = screen_point
 
         # Step 5: Hit test against visible windows
         windows = self._get_windows()

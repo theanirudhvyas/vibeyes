@@ -14,7 +14,11 @@ from vibeyes.camera import Camera, list_cameras
 from vibeyes.detector import Detector
 from vibeyes.face_tracker import FaceTracker
 from vibeyes.gaze_estimator import GazeEstimator
+from vibeyes.pane_tracker import get_zellij_layout, parse_active_tab_panes, hit_test_pane
 from vibeyes.window_tracker import get_visible_windows
+
+# Terminal apps where we should try zellij pane detection
+TERMINAL_APPS = {"Alacritty", "alacritty", "kitty", "WezTerm", "iTerm2", "Terminal"}
 
 MODEL_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "models", "face_landmarker.task")
 CALIBRATION_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "calibration.json")
@@ -142,9 +146,13 @@ def run_calibration(face_tracker: FaceTracker, gaze_estimator: GazeEstimator, ca
 def run_tracking(detector: Detector, camera_device: int = 0):
     """Run continuous gaze tracking, printing detected window to terminal."""
     camera = Camera(device=camera_device)
-    last_window = None
+    last_label = None
     fps_counter = 0
     fps_start = time.time()
+
+    # Cache zellij layout (refresh periodically)
+    zellij_panes = None
+    zellij_layout_time = 0
 
     print("\nTracking started. Press Ctrl+C to stop.\n")
 
@@ -161,23 +169,56 @@ def run_tracking(detector: Detector, camera_device: int = 0):
                 break
 
             fps_counter += 1
-            elapsed = time.time() - fps_start
+            now = time.time()
+            elapsed = now - fps_start
             if elapsed >= 1.0:
                 fps = fps_counter / elapsed
                 fps_counter = 0
-                fps_start = time.time()
+                fps_start = now
             else:
                 fps = 0
 
-            if window is not None:
-                label = f"{window.app_name}: {window.title}" if window.title else window.app_name
-                if label != last_window:
-                    print(f"  Looking at: {label}" + (f"  ({fps:.0f} fps)" if fps > 0 else ""))
-                    last_window = label
-            else:
-                if last_window is not None:
+            if window is None:
+                if last_label is not None:
                     print("  Looking at: (nothing detected)")
-                    last_window = None
+                    last_label = None
+                continue
+
+            label = f"{window.app_name}: {window.title}" if window.title else window.app_name
+            pane_label = ""
+
+            # If the window is a terminal, try to detect zellij pane
+            if window.app_name in TERMINAL_APPS:
+                # Refresh zellij layout every 2 seconds
+                if now - zellij_layout_time > 2.0:
+                    layout = get_zellij_layout()
+                    if layout:
+                        zellij_panes = parse_active_tab_panes(layout)
+                    else:
+                        zellij_panes = None
+                    zellij_layout_time = now
+
+                if zellij_panes:
+                    screen_point = detector.last_screen_point
+                    if screen_point:
+                        wx, wy, ww, wh = window.bounds
+                        pane = hit_test_pane(
+                            screen_point.x, screen_point.y,
+                            zellij_panes,
+                            window_x=wx, window_y=wy,
+                            window_w=ww, window_h=wh,
+                        )
+                        if pane:
+                            pane_cmd = pane.command.split("/")[-1]  # basename
+                            pane_label = f" > pane: {pane_cmd}"
+                            if pane.cwd:
+                                pane_cwd = pane.cwd.split("/")[-1]
+                                pane_label += f" ({pane_cwd})"
+
+            full_label = label + pane_label
+            if full_label != last_label:
+                print(f"  Looking at: {full_label}" + (f"  ({fps:.0f} fps)" if fps > 0 else ""))
+                last_label = full_label
 
     except KeyboardInterrupt:
         print("\nStopped.")
