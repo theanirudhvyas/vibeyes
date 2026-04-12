@@ -143,12 +143,8 @@ def run_calibration(face_tracker: FaceTracker, gaze_estimator: GazeEstimator, ca
     return calibration
 
 
-def run_tracking(detector: Detector, camera_device: int = 0, dwell_time: float = 0.5, show_overlay: bool = False):
-    """Run continuous gaze tracking, printing detected window to terminal.
-
-    dwell_time: seconds the gaze must stay on a new target before switching (hysteresis).
-    show_overlay: if True, show a transparent dot on screen where gaze is estimated.
-    """
+def run_tracking(detector: Detector, camera_device: int = 0, dwell_time: float = 0.5, show_overlay: bool = False, debug: bool = False):
+    """Run continuous gaze tracking, printing detected window to terminal."""
     camera = Camera(device=camera_device)
     confirmed_label = None  # the label we've committed to displaying
     candidate_label = None  # a new label we're considering switching to
@@ -197,6 +193,12 @@ def run_tracking(detector: Detector, camera_device: int = 0, dwell_time: float =
                 fps = fps_counter / elapsed
                 fps_counter = 0
                 fps_start = now
+
+                # Debug output: print raw values once per second
+                if debug and detector.last_gaze_ratio and detector.last_screen_point:
+                    gr = detector.last_gaze_ratio
+                    sp = detector.last_screen_point
+                    print(f"  [debug] gaze=({gr.x:.3f}, {gr.y:.3f}) screen=({sp.x:.0f}, {sp.y:.0f}) fps={fps:.0f}")
             else:
                 fps = 0
 
@@ -267,10 +269,11 @@ def main():
     parser = argparse.ArgumentParser(description="VibEyes: Webcam gaze-to-window tracker")
     parser.add_argument("--calibrate", action="store_true", help="Run calibration")
     parser.add_argument("--model", default=MODEL_PATH, help="Path to face_landmarker.task model")
-    parser.add_argument("--smoothing", type=float, default=0.4, help="Gaze smoothing factor (0-1)")
+    parser.add_argument("--smoothing", type=float, default=0.2, help="Gaze smoothing factor (0-1, lower=smoother, default 0.2)")
     parser.add_argument("--camera", type=int, default=None, help="Camera device index (use --list-cameras to see available)")
     parser.add_argument("--dwell", type=float, default=0.5, help="Seconds gaze must stay on new target before switching (default 0.5)")
     parser.add_argument("--overlay", action="store_true", help="Show a red dot overlay where gaze is estimated")
+    parser.add_argument("--debug", action="store_true", help="Print raw gaze/screen values every second")
     parser.add_argument("--list-cameras", action="store_true", help="List available cameras and exit")
     args = parser.parse_args()
 
@@ -329,7 +332,7 @@ def main():
         get_windows=lambda: get_visible_windows(exclude_app="Python"),
     )
 
-    run_tracking(detector, camera_device=camera_device, dwell_time=args.dwell, show_overlay=args.overlay)
+    run_tracking(detector, camera_device=camera_device, dwell_time=args.dwell, show_overlay=args.overlay, debug=args.debug)
     face_tracker.close()
 
 

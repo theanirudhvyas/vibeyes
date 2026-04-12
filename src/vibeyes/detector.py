@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from vibeyes import Point, WindowInfo
+from vibeyes import GazeRatio, Point, WindowInfo
 from vibeyes.window_tracker import hit_test
 
 
@@ -12,12 +12,15 @@ class Detector:
     Pipeline: frame -> face_tracker -> gaze_estimator -> calibration -> window hit_test
     """
 
-    def __init__(self, face_tracker, gaze_estimator, calibration, get_windows):
+    def __init__(self, face_tracker, gaze_estimator, calibration, get_windows, screen_smoothing: float = 0.3):
         self.face_tracker = face_tracker
         self.gaze_estimator = gaze_estimator
         self.calibration = calibration
         self._get_windows = get_windows
         self.last_screen_point: Point | None = None
+        self.last_gaze_ratio: GazeRatio | None = None
+        self._screen_smoothing = screen_smoothing
+        self._smoothed_screen: Point | None = None
 
     def detect(self, frame: np.ndarray) -> WindowInfo | None:
         """Run the full detection pipeline on a single frame.
@@ -36,11 +39,22 @@ class Detector:
 
         # Step 3: Estimate gaze ratio
         gaze_ratio = self.gaze_estimator.estimate(face_data)
+        self.last_gaze_ratio = gaze_ratio
 
         # Step 4: Map to screen coordinates
-        screen_point = self.calibration.predict(gaze_ratio)
-        self.last_screen_point = screen_point
+        raw_screen = self.calibration.predict(gaze_ratio)
 
-        # Step 5: Hit test against visible windows
+        # Step 5: Smooth screen coordinates (EMA)
+        if self._smoothed_screen is None:
+            self._smoothed_screen = raw_screen
+        else:
+            s = self._screen_smoothing
+            self._smoothed_screen = Point(
+                x=s * raw_screen.x + (1 - s) * self._smoothed_screen.x,
+                y=s * raw_screen.y + (1 - s) * self._smoothed_screen.y,
+            )
+        self.last_screen_point = self._smoothed_screen
+
+        # Step 6: Hit test against visible windows
         windows = self._get_windows()
-        return hit_test(screen_point.x, screen_point.y, windows)
+        return hit_test(self._smoothed_screen.x, self._smoothed_screen.y, windows)
