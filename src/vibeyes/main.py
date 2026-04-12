@@ -105,7 +105,7 @@ def run_calibration(face_tracker: FaceTracker, gaze_estimator: GazeEstimator, ca
 
             # Show small camera preview in corner
             if frame is not None:
-                preview = cv2.resize(frame, (160, 120))
+                preview = cv2.flip(cv2.resize(frame, (160, 120)), 1)
                 canvas[10:130, screen_w - 170:screen_w - 10] = preview
 
             cv2.imshow("VibEyes Calibration", canvas)
