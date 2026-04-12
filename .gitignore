@@ -10,3 +10,4 @@ build/
 *.so
 .DS_Store
 calibration.json
+models/
