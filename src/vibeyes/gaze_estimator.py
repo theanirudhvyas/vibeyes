@@ -2,6 +2,22 @@
 
 from vibeyes import EyeData, FaceData, GazeRatio
 
+# Eye Aspect Ratio threshold -- below this the eye is considered closed (blink)
+EAR_BLINK_THRESHOLD = 0.15
+
+
+def _eye_aspect_ratio(eye: EyeData) -> float:
+    """Compute Eye Aspect Ratio (EAR) -- low value means eye is closed."""
+    top_y = min(eye.top.y, eye.bottom.y)
+    bottom_y = max(eye.top.y, eye.bottom.y)
+    left_x = min(eye.inner_corner.x, eye.outer_corner.x)
+    right_x = max(eye.inner_corner.x, eye.outer_corner.x)
+    vertical = bottom_y - top_y
+    horizontal = right_x - left_x
+    if horizontal < 1e-6:
+        return 0.0
+    return vertical / horizontal
+
 
 def _eye_gaze_ratio(eye: EyeData) -> tuple[float, float]:
     """Compute horizontal and vertical gaze ratio for one eye.
@@ -35,15 +51,21 @@ class GazeEstimator:
         self._smoothing = smoothing_factor
         self._prev: GazeRatio | None = None
 
-    def estimate(self, face_data: FaceData) -> GazeRatio:
-        """Compute smoothed gaze features from face landmarks and head pose."""
+    def estimate(self, face_data: FaceData) -> GazeRatio | None:
+        """Compute smoothed gaze features. Returns None during blinks."""
+        # Blink detection: if either eye is closed, return previous gaze
+        left_ear = _eye_aspect_ratio(face_data.left_eye)
+        right_ear = _eye_aspect_ratio(face_data.right_eye)
+
+        if left_ear < EAR_BLINK_THRESHOLD or right_ear < EAR_BLINK_THRESHOLD:
+            return self._prev  # freeze during blink
+
         lx, ly = _eye_gaze_ratio(face_data.left_eye)
         rx, ry = _eye_gaze_ratio(face_data.right_eye)
 
         iris_x = max(0.0, min(1.0, (lx + rx) / 2.0))
         iris_y = max(0.0, min(1.0, (ly + ry) / 2.0))
 
-        # Head pose from 3D mesh (degrees)
         head_yaw = face_data.head_pose.yaw
         head_pitch = face_data.head_pose.pitch
 

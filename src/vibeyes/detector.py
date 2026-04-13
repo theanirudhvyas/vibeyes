@@ -59,8 +59,14 @@ class Detector:
         if not self.calibration.is_calibrated:
             raise RuntimeError("Detector not calibrated -- run calibration first")
 
-        # Step 3: Estimate gaze ratio
+        # Step 3: Estimate gaze ratio (None during blinks)
         gaze_ratio = self.gaze_estimator.estimate(face_data)
+        if gaze_ratio is None:
+            # Blink detected -- hold last known position
+            if self.last_screen_point is not None:
+                windows = self._get_windows()
+                return hit_test(self.last_screen_point.x, self.last_screen_point.y, windows)
+            return None
         self.last_gaze_ratio = gaze_ratio
 
         # Step 4: Map to screen coordinates
