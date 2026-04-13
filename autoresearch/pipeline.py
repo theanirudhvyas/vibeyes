@@ -151,7 +151,12 @@ def extract_gaze_features(frame: np.ndarray, landmarker: FaceLandmarker) -> tupl
         angles, _, _, _, _, _ = cv2.RQDecomp3x3(rmat)
         head_pitch, head_yaw = angles[0], angles[1]
 
-    return lx, ly, rx, ry, head_yaw, head_pitch
+    # Inter-pupillary distance (proxy for distance from camera)
+    left_iris = landmarks[LEFT_IRIS_CENTER]
+    right_iris = landmarks[RIGHT_IRIS_CENTER]
+    ipd = math.sqrt((left_iris.x - right_iris.x)**2 + (left_iris.y - right_iris.y)**2)
+
+    return lx, ly, rx, ry, head_yaw, head_pitch, ipd
 
 
 # ============================================================
@@ -159,23 +164,25 @@ def extract_gaze_features(frame: np.ndarray, landmarker: FaceLandmarker) -> tupl
 # ============================================================
 
 def build_feature_matrix_x(points: list[tuple[float, ...]]) -> np.ndarray:
-    """Features for predicting screen X: horizontal iris ratios + head yaw."""
+    """Features for predicting screen X: horizontal iris ratios + head yaw + IPD."""
     pts = np.array(points)
     n = len(pts)
     lx = pts[:, 0]
     rx = pts[:, 2]
     hx = pts[:, 4]  # head yaw
-    return np.column_stack([np.ones(n), lx, rx, hx])
+    ipd = pts[:, 6]
+    return np.column_stack([np.ones(n), lx, rx, hx, ipd])
 
 
 def build_feature_matrix_y(points: list[tuple[float, ...]]) -> np.ndarray:
-    """Features for predicting screen Y: vertical iris ratios + head pitch."""
+    """Features for predicting screen Y: vertical iris ratios + head pitch + IPD."""
     pts = np.array(points)
     n = len(pts)
     ly = pts[:, 1]
     ry = pts[:, 3]
     hy = pts[:, 5]  # head pitch
-    return np.column_stack([np.ones(n), ly, ry, hy])
+    ipd = pts[:, 6]
+    return np.column_stack([np.ones(n), ly, ry, hy, ipd])
 
 
 RIDGE_ALPHA = 1.3
