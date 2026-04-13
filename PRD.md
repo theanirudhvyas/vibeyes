@@ -152,13 +152,25 @@ Webcam Frame (640x480, 30fps)
 "User is looking at: VS Code"
 ```
 
-**Two approaches for gaze estimation:**
+**Three approaches for gaze estimation (updated with 2024-2025 SOTA research):**
 
 | Approach | How It Works | Accuracy | Speed |
 |----------|-------------|----------|-------|
-| **Geometric** | Compute 3D gaze vector from iris position + eye model + head pose, intersect with screen plane | 2-4 degrees (calibrated) | ~5ms |
-| **Appearance-based (deep learning)** | Feed face/eye crops to a CNN (L2CS-Net, ETH-XGaze) that directly predicts gaze angles | 3-5 degrees (cross-person) | ~10-15ms on CPU, ~5ms on GPU |
-| **Hybrid (recommended)** | Use geometric approach for coarse estimation, refine with lightweight learned model | 1.5-3 degrees | ~10ms |
+| **Geometric (current)** | Iris-to-corner ratio + solvePnP head pose, polynomial regression to screen coords | ~15+ degrees (our prototype) | ~5ms |
+| **Geometric + Normalization** | Same, but warp eye patch to canonical frontal view before computing ratios. Removes head-pose confound from iris signal. | 2-4 degrees | ~8ms |
+| **3D Gaze Vector** | Estimate 3D eyeball center from face mesh, compute gaze ray through iris center, intersect with screen plane. | 2-3 degrees | ~5ms |
+| **Lightweight CNN (pperle/gaze-tracking)** | Cropped eye images + head pose fed to a small CNN. 128 calibration samples. | ~2.4-2.6 degrees | ~10ms |
+| **SOTA Transformer (GazeSymCAT, 3DPE-Gaze)** | Cross-attention over full face + eye crops, 3D facial priors. | 1-2 degrees | ~15-30ms |
+| **Scene-level (Gaze-LLE, CVPR 2025)** | Frozen DINOv2/ViT encoder + lightweight decoder, predicts gaze target pixel in scene. | sub-1 degree (controlled) | ~20ms |
+
+**Key insight from SOTA (2024-2025):** Our current accuracy gap (~750-2200px) is NOT from using landmarks instead of a trained model -- it's from computing iris ratios on **raw 2D projections** without geometric normalization. When the head turns, the 2D projection distorts the iris-to-corner geometry even if the actual gaze direction hasn't changed. The single biggest win is normalizing the eye patch to a canonical frontal view before extracting any gaze features.
+
+**References:**
+- 3DPE-Gaze (2025): 3D facial landmarks as priors, ~1-2 degree angular error
+- GazeSymCAT (2025): Symmetric cross-attention transformer, SOTA on ETH-XGaze
+- Gaze-LLE (CVPR 2025): Frozen DINOv2 + lightweight decoder, SOTA gaze target estimation
+- GeoGaze (2026): MediaPipe 478-point mesh + normalized iris ratios, 66fps CPU, no training needed
+- pperle/gaze-tracking: Lightweight CNN, ~2.4° with 128 calibration samples
 
 ### 3.3 Calibration
 

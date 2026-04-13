@@ -90,33 +90,75 @@ LOOP FOREVER:
 **NEVER STOP.** The human may be asleep. Each experiment takes ~30-60 seconds,
 so you can run ~60-120 experiments per hour.
 
-## Ideas to try (not exhaustive)
+## Ideas to try (ordered by expected impact)
+
+### HIGH PRIORITY — likely to give biggest accuracy gains
+
+Geometric normalization (THE #1 problem per SOTA research):
+- The current iris ratio is computed on raw 2D landmark projections which are
+  confounded by head pose. When the head turns, the 2D projection distorts the
+  iris-to-corner distance even if gaze direction didn't change.
+- Use the rotation matrix from solvePnP to warp/rotate the eye landmarks to a
+  canonical frontal view BEFORE computing iris ratios.
+- This is what GeoGaze (2026) and 3DPE-Gaze (2025) both do.
+- Implementation: apply inverse rotation to the 2D eye landmarks, then compute ratios.
+
+Ridge regression (prevent overfitting):
+- Replace np.linalg.lstsq with Ridge regression (L2 regularization).
+- Current lstsq with 7 features and ~20-100 noisy points overfits badly.
+- Try: `from sklearn.linear_model import Ridge` or implement manually with
+  `(A^T A + alpha*I)^-1 A^T y` using numpy.
+- Try alpha values: 0.1, 1.0, 10.0, 100.0.
+
+Feature normalization:
+- Z-score normalize all features before regression (subtract mean, divide by std).
+- Iris ratios are 0-1, head yaw is -15 to +15 degrees — mixing these scales
+  without normalization biases the regression toward larger-magnitude features.
+
+3D gaze vector instead of 2D ratios:
+- Estimate 3D eyeball center from the face mesh (midpoint of eye corners + offset).
+- Compute gaze direction vector from eyeball center through iris center.
+- Intersect this ray with the screen plane to get screen coordinates.
+- This is geometrically more correct than a 2D ratio mapped through polynomial regression.
+
+### MEDIUM PRIORITY — good incremental improvements
 
 Feature extraction:
 - Use more landmark indices (MediaPipe provides 478 total)
-- Weight left/right eye differently based on head yaw
+- Weight left/right eye differently based on head yaw (the eye closer to the
+  camera has better iris visibility)
 - Use eye aspect ratio (openness) as an additional feature
-- Use nose tip position relative to face center
-- Compute gaze direction vectors instead of simple ratios
+- Add face width/height ratio as a distance proxy
+- Inter-pupillary distance (changes with viewing distance)
+- Nose tip position relative to face center
 
 Calibration:
 - Quadratic polynomial (add iris_x^2, iris_y^2, etc.)
-- Ridge regression (regularization to prevent overfitting)
-- Separate models for horizontal and vertical prediction
-- Weighted least squares (recent clicks weighted more)
+- Separate models for horizontal (screen_x) and vertical (screen_y)
+- Weighted least squares (weight recent clicks more than old ones)
+- Try SVR (Support Vector Regression) instead of linear regression
+
+Head pose:
+- Add head roll as a feature (currently only yaw + pitch)
+- Use more landmarks for solvePnP (8+ instead of 6 — more stable)
+- Different solvePnP solver flags (EPNP, AP3P, SQPNP)
+- Different 3D face model dimensions
+- Use translation vector (encodes distance from camera)
 
 Smoothing:
 - Kalman filter instead of median + EMA
-- Adaptive smoothing (more smoothing when head is still, less when moving)
-- Different median window sizes
 - One-euro filter (jitter-adaptive low-pass filter)
+- Adaptive smoothing (more when head is still, less when moving)
+- Different median window sizes
 
-Head pose:
-- Different solvePnP solver flags (EPNP, AP3P, SQPNP)
-- More landmarks for solvePnP (use 8+ instead of 6)
-- Different 3D face model dimensions
-- Use head roll as an additional feature
+### LOWER PRIORITY — bigger changes, try after basics work
 
 Preprocessing:
 - Histogram equalization on frames before landmark detection
+- CLAHE (contrast-limited adaptive histogram equalization) on eye region
 - Different frame resolutions
+
+Appearance-based features:
+- Compute histogram of oriented gradients (HOG) on cropped eye region
+- Use mean pixel intensity of iris region as additional feature
+- Edge detection on eye region for pupil localization

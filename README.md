@@ -128,11 +128,23 @@ models/                face_landmarker.task (gitignored, downloaded by make setu
 | Frame recording for offline replay | Done |
 | Autoresearch autonomous accuracy optimizer | Done |
 | macOS permission handling (Camera, Accessibility) | Done |
-| Improve gaze accuracy (currently 750-2200px error) | Pending |
-| L2CS-Net or similar dedicated gaze estimation model (ONNX) | Pending |
+| **Accuracy: Tier 1 (autoresearch experiments)** | |
+| Ridge regression (replace lstsq to prevent overfitting) | Pending |
+| Feature normalization (z-score before regression) | Pending |
+| Add head roll + more solvePnP landmarks (8+ instead of 6) | Pending |
+| Extract more landmark features (face size, inter-pupillary distance) | Pending |
+| Weight left/right eye by head yaw | Pending |
+| **Accuracy: Tier 2 (geometric pipeline)** | |
+| Geometric normalization (warp eye to frontal view before iris ratio) | Pending |
+| 3D gaze vector (eyeball center through iris, intersect screen plane) | Pending |
+| Per-user eye model fitting (estimate eyeball radius and center) | Pending |
+| **Accuracy: Tier 3 (learned models)** | |
+| Lightweight gaze CNN (pperle/gaze-tracking style, ~2.4 degree) | Pending |
+| GeoGaze-style robust directional classification as fallback | Pending |
+| Fine-tune gaze model on recorded autoresearch data | Pending |
+| **Other MVP features** | |
 | Posture-invariant tracking (lap vs desk vs standing) | Pending |
 | Auto-detect posture change and trigger recalibration | Pending |
-| Camera angle normalization (perspective correction) | Pending |
 | External webcam support (different FOVs and positions) | Pending |
 | Menu bar app with camera status indicator | Pending |
 | Auto-raise gazed window after sustained attention | Pending |
