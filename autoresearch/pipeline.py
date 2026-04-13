@@ -156,7 +156,21 @@ def extract_gaze_features(frame: np.ndarray, landmarker: FaceLandmarker) -> tupl
     right_iris = landmarks[RIGHT_IRIS_CENTER]
     ipd = math.sqrt((left_iris.x - right_iris.x)**2 + (left_iris.y - right_iris.y)**2)
 
-    return lx, ly, rx, ry, head_yaw, head_pitch, ipd
+    # Eye Aspect Ratio (how open the eyes are)
+    def ear(top_idx, bottom_idx, inner_idx, outer_idx):
+        top = landmarks[top_idx]
+        bottom = landmarks[bottom_idx]
+        inner = landmarks[inner_idx]
+        outer = landmarks[outer_idx]
+        v_dist = math.sqrt((top.x - bottom.x)**2 + (top.y - bottom.y)**2)
+        h_dist = math.sqrt((inner.x - outer.x)**2 + (inner.y - outer.y)**2)
+        return v_dist / h_dist if h_dist > 1e-6 else 0.3
+
+    left_ear = ear(LEFT_EYE_TOP, LEFT_EYE_BOTTOM, LEFT_EYE_INNER_CORNER, LEFT_EYE_OUTER_CORNER)
+    right_ear = ear(RIGHT_EYE_TOP, RIGHT_EYE_BOTTOM, RIGHT_EYE_INNER_CORNER, RIGHT_EYE_OUTER_CORNER)
+    avg_ear = (left_ear + right_ear) / 2
+
+    return lx, ly, rx, ry, head_yaw, head_pitch, ipd, avg_ear
 
 
 # ============================================================
@@ -164,7 +178,7 @@ def extract_gaze_features(frame: np.ndarray, landmarker: FaceLandmarker) -> tupl
 # ============================================================
 
 def build_feature_matrix_x(points: list[tuple[float, ...]]) -> np.ndarray:
-    """Features for predicting screen X: avg + diff of horizontal iris ratios + head yaw + IPD."""
+    """Features for predicting screen X: avg + diff + head yaw + IPD + EAR."""
     pts = np.array(points)
     n = len(pts)
     lx = pts[:, 0]
@@ -173,11 +187,12 @@ def build_feature_matrix_x(points: list[tuple[float, ...]]) -> np.ndarray:
     diff_x = lx - rx  # vergence signal
     hx = pts[:, 4]  # head yaw
     ipd = pts[:, 6]
-    return np.column_stack([np.ones(n), avg_x, diff_x, hx, ipd])
+    ear = pts[:, 7]
+    return np.column_stack([np.ones(n), avg_x, diff_x, hx, ipd, ear])
 
 
 def build_feature_matrix_y(points: list[tuple[float, ...]]) -> np.ndarray:
-    """Features for predicting screen Y: avg + diff of vertical iris ratios + head pitch + IPD."""
+    """Features for predicting screen Y: avg + diff + head pitch + IPD + EAR."""
     pts = np.array(points)
     n = len(pts)
     ly = pts[:, 1]
@@ -186,7 +201,8 @@ def build_feature_matrix_y(points: list[tuple[float, ...]]) -> np.ndarray:
     diff_y = ly - ry  # vertical vergence
     hy = pts[:, 5]  # head pitch
     ipd = pts[:, 6]
-    return np.column_stack([np.ones(n), avg_y, diff_y, hy, ipd])
+    ear = pts[:, 7]
+    return np.column_stack([np.ones(n), avg_y, diff_y, hy, ipd, ear])
 
 
 RIDGE_ALPHA = 1.3
