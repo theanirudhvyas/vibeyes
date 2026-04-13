@@ -76,8 +76,8 @@ class PipelineState:
     landmarker: FaceLandmarker
     coeffs_x: np.ndarray
     coeffs_y: np.ndarray
-    feat_mean: np.ndarray = None
-    feat_std: np.ndarray = None
+    norm_x: tuple = None  # (mean, std) for X features
+    norm_y: tuple = None  # (mean, std) for Y features
 
 
 # ============================================================
@@ -158,48 +158,65 @@ def extract_gaze_features(frame: np.ndarray, landmarker: FaceLandmarker) -> tupl
 # Calibration
 # ============================================================
 
-def build_feature_matrix(points: list[tuple[float, ...]]) -> np.ndarray:
+def build_feature_matrix_x(points: list[tuple[float, ...]]) -> np.ndarray:
+    """Features for predicting screen X: horizontal iris ratios + head yaw."""
     pts = np.array(points)
     n = len(pts)
-    lx, ly = pts[:, 0], pts[:, 1]
-    rx, ry = pts[:, 2], pts[:, 3]
-    hx, hy = pts[:, 4], pts[:, 5]
+    lx = pts[:, 0]
+    rx = pts[:, 2]
+    hx = pts[:, 4]  # head yaw
+    return np.column_stack([np.ones(n), lx, rx, hx])
 
-    return np.column_stack([
-        np.ones(n),
-        lx, ly, rx, ry,
-        hx, hy,
-    ])
+
+def build_feature_matrix_y(points: list[tuple[float, ...]]) -> np.ndarray:
+    """Features for predicting screen Y: vertical iris ratios + head pitch."""
+    pts = np.array(points)
+    n = len(pts)
+    ly = pts[:, 1]
+    ry = pts[:, 3]
+    hy = pts[:, 5]  # head pitch
+    return np.column_stack([np.ones(n), ly, ry, hy])
 
 
 RIDGE_ALPHA = 0.9
 
+def _ridge_fit(A, y, alpha):
+    ATA = A.T @ A
+    reg = alpha * np.eye(ATA.shape[0])
+    return np.linalg.solve(ATA + reg, A.T @ y)
+
+
 def fit_calibration(gaze_points, screen_points):
-    A = build_feature_matrix(gaze_points)
-    # Z-score normalize (skip column 0 which is the bias/ones column)
-    feat_mean = A[:, 1:].mean(axis=0)
-    feat_std = A[:, 1:].std(axis=0)
-    feat_std[feat_std < 1e-8] = 1.0  # avoid division by zero
-    A_norm = A.copy()
-    A_norm[:, 1:] = (A[:, 1:] - feat_mean) / feat_std
+    Ax = build_feature_matrix_x(gaze_points)
+    Ay = build_feature_matrix_y(gaze_points)
+    # Z-score normalize each
+    mean_x = Ax[:, 1:].mean(axis=0)
+    std_x = Ax[:, 1:].std(axis=0)
+    std_x[std_x < 1e-8] = 1.0
+    Ax_norm = Ax.copy()
+    Ax_norm[:, 1:] = (Ax[:, 1:] - mean_x) / std_x
+
+    mean_y = Ay[:, 1:].mean(axis=0)
+    std_y = Ay[:, 1:].std(axis=0)
+    std_y[std_y < 1e-8] = 1.0
+    Ay_norm = Ay.copy()
+    Ay_norm[:, 1:] = (Ay[:, 1:] - mean_y) / std_y
 
     screen = np.array(screen_points)
-    # Ridge regression: (A^T A + alpha*I)^-1 A^T y
-    ATA = A_norm.T @ A_norm
-    reg = RIDGE_ALPHA * np.eye(ATA.shape[0])
-    ATA_reg = ATA + reg
-    ATy_x = A_norm.T @ screen[:, 0]
-    ATy_y = A_norm.T @ screen[:, 1]
-    coeffs_x = np.linalg.solve(ATA_reg, ATy_x)
-    coeffs_y = np.linalg.solve(ATA_reg, ATy_y)
-    return coeffs_x, coeffs_y, feat_mean, feat_std
+    coeffs_x = _ridge_fit(Ax_norm, screen[:, 0], RIDGE_ALPHA)
+    coeffs_y = _ridge_fit(Ay_norm, screen[:, 1], RIDGE_ALPHA)
+    return coeffs_x, coeffs_y, (mean_x, std_x), (mean_y, std_y)
 
 
-def calibration_predict(gaze_features, coeffs_x, coeffs_y, feat_mean, feat_std):
-    features = build_feature_matrix([gaze_features])
-    features[:, 1:] = (features[:, 1:] - feat_mean) / feat_std
-    sx = float((features @ coeffs_x)[0])
-    sy = float((features @ coeffs_y)[0])
+def calibration_predict(gaze_features, coeffs_x, coeffs_y, norm_x, norm_y):
+    mean_x, std_x = norm_x
+    mean_y, std_y = norm_y
+    fx = build_feature_matrix_x([gaze_features])
+    fy = build_feature_matrix_y([gaze_features])
+    fx[:, 1:] = (fx[:, 1:] - mean_x) / std_x
+    fy[:, 1:] = (fy[:, 1:] - mean_y) / std_y
+    sx = float((fx @ coeffs_x)[0])
+    sy = float((fy @ coeffs_y)[0])
     return sx, sy
 
 
@@ -281,14 +298,14 @@ def replay_calibration(frames_dir: str, calibration_clicks: list[dict]) -> Pipel
             f"(need {MIN_CALIBRATION_POINTS}). Record more data."
         )
 
-    coeffs_x, coeffs_y, feat_mean, feat_std = fit_calibration(gaze_points, screen_points)
+    coeffs_x, coeffs_y, norm_x, norm_y = fit_calibration(gaze_points, screen_points)
 
     return PipelineState(
         landmarker=landmarker,
         coeffs_x=coeffs_x,
         coeffs_y=coeffs_y,
-        feat_mean=feat_mean,
-        feat_std=feat_std,
+        norm_x=norm_x,
+        norm_y=norm_y,
     )
 
 
@@ -299,7 +316,7 @@ def predict(frame: np.ndarray, state: PipelineState) -> tuple[float, float]:
 
     raw_x, raw_y = calibration_predict(
         features, state.coeffs_x, state.coeffs_y,
-        state.feat_mean, state.feat_std)
+        state.norm_x, state.norm_y)
 
     final_x = max(0.0, min(SCREEN_W, raw_x))
     final_y = max(0.0, min(SCREEN_H, raw_y))
