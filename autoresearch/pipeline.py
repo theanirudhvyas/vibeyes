@@ -218,26 +218,30 @@ def _fit_normalized(gaze_points, screen_points):
 
 
 def fit_calibration(gaze_points, screen_points):
-    # First fit
-    coeffs_x, coeffs_y, norm_x, norm_y = _fit_normalized(gaze_points, screen_points)
+    cur_gaze = list(gaze_points)
+    cur_screen = list(screen_points)
 
-    # Compute residuals
-    screen = np.array(screen_points)
-    residuals = []
-    for i, gp in enumerate(gaze_points):
-        px, py = calibration_predict(gp, coeffs_x, coeffs_y, norm_x, norm_y)
-        err = math.sqrt((px - screen[i, 0])**2 + (py - screen[i, 1])**2)
-        residuals.append(err)
-    residuals = np.array(residuals)
-    median_res = np.median(residuals)
+    for _ in range(2):  # iterative outlier rejection
+        coeffs_x, coeffs_y, norm_x, norm_y = _fit_normalized(cur_gaze, cur_screen)
 
-    # Remove outliers
-    mask = residuals <= OUTLIER_THRESHOLD * median_res
-    if mask.sum() >= MIN_CALIBRATION_POINTS:
-        filtered_gaze = [gp for gp, m in zip(gaze_points, mask) if m]
-        filtered_screen = [sp for sp, m in zip(screen_points, mask) if m]
-        coeffs_x, coeffs_y, norm_x, norm_y = _fit_normalized(filtered_gaze, filtered_screen)
+        # Compute residuals
+        screen_arr = np.array(cur_screen)
+        residuals = []
+        for i, gp in enumerate(cur_gaze):
+            px, py = calibration_predict(gp, coeffs_x, coeffs_y, norm_x, norm_y)
+            err = math.sqrt((px - screen_arr[i, 0])**2 + (py - screen_arr[i, 1])**2)
+            residuals.append(err)
+        residuals = np.array(residuals)
+        median_res = np.median(residuals)
 
+        mask = residuals <= OUTLIER_THRESHOLD * median_res
+        if mask.sum() >= MIN_CALIBRATION_POINTS:
+            cur_gaze = [gp for gp, m in zip(cur_gaze, mask) if m]
+            cur_screen = [sp for sp, m in zip(cur_screen, mask) if m]
+        else:
+            break
+
+    coeffs_x, coeffs_y, norm_x, norm_y = _fit_normalized(cur_gaze, cur_screen)
     return coeffs_x, coeffs_y, norm_x, norm_y
 
 
