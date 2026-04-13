@@ -223,7 +223,7 @@ def run_tracking(detector: Detector, camera_device: int = 0, dwell_time: float =
 
             # Feed current gaze to click calibrator
             if click_calibrator and detector.last_gaze_ratio:
-                click_calibrator.update_gaze(detector.last_gaze_ratio)
+                click_calibrator.update_gaze(detector.last_gaze_ratio, detector.last_screen_point)
                 click_calibrator.check_refit()
 
             # Update overlay with raw gaze position (before hysteresis)

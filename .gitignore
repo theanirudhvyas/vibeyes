@@ -10,4 +10,5 @@ build/
 *.so
 .DS_Store
 calibration.json
+vibeyes_metrics.db
 models/

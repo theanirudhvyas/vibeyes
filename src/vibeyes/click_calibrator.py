@@ -11,6 +11,7 @@ import Quartz
 
 from vibeyes import GazeRatio, Point
 from vibeyes.calibration import Calibration
+from vibeyes.metrics import MetricsTracker
 
 
 class ClickCalibrator:
@@ -20,12 +21,13 @@ class ClickCalibrator:
         self._calibration = calibration
         self._min_points = min_points_to_refit
         self._max_points = max_points
-        self._pending_clicks: list[tuple[float, float, float]] = []  # (x, y, timestamp)
         self._click_count = 0
         self._last_gaze: GazeRatio | None = None
+        self._last_screen_point: Point | None = None
         self._lock = threading.Lock()
         self._running = False
         self._thread: threading.Thread | None = None
+        self._metrics = MetricsTracker()
 
     def start(self):
         """Start monitoring mouse clicks in a background thread."""
@@ -34,12 +36,19 @@ class ClickCalibrator:
         self._thread.start()
 
     def stop(self):
-        """Stop monitoring."""
+        """Stop monitoring and print final stats."""
         self._running = False
+        stats = self._metrics.get_stats()
+        if stats["total_clicks"] > 0:
+            print(f"\n  Accuracy stats: {stats['total_clicks']} clicks tracked, "
+                  f"avg error={stats['avg_error_px']}px, "
+                  f"recent avg={stats['recent_avg_error_px']}px")
+        self._metrics.close()
 
-    def update_gaze(self, gaze: GazeRatio):
+    def update_gaze(self, gaze: GazeRatio, screen_point: Point | None = None):
         """Update the current gaze estimate (called each frame from tracking loop)."""
         self._last_gaze = gaze
+        self._last_screen_point = screen_point
 
     def check_refit(self) -> bool:
         """Check if we have enough new click-based points to refit. Returns True if refitted."""
@@ -49,8 +58,10 @@ class ClickCalibrator:
                     self._calibration.fit()
                     count = self._click_count
                     self._click_count = 0
-                    print(f"  [click-cal] Refitted with {count} new click points "
-                          f"({self._calibration.point_count} total)")
+                    recent_err = self._metrics.get_recent_avg_error(20)
+                    err_str = f", recent avg error={recent_err:.0f}px" if recent_err else ""
+                    print(f"  [click-cal] Refitted with {count} new clicks "
+                          f"({self._calibration.point_count} total){err_str}")
                     return True
                 except ValueError:
                     pass
@@ -67,14 +78,22 @@ class ClickCalibrator:
                 click_x, click_y = loc.x, loc.y
 
                 gaze = self._last_gaze
+                predicted = self._last_screen_point
                 if gaze is not None:
                     with self._lock:
+                        # Record error metric before updating calibration
+                        if predicted is not None:
+                            error = self._metrics.record_click(
+                                predicted.x, predicted.y,
+                                click_x, click_y,
+                                self._calibration.point_count,
+                            )
+
                         self._calibration.add_point(gaze, Point(click_x, click_y))
                         self._click_count += 1
 
-                        # Trim old points if over max (keep recent ones)
+                        # Trim old points if over max
                         if self._calibration.point_count > self._max_points:
-                            # Keep the last max_points entries
                             self._calibration._gaze_points = self._calibration._gaze_points[-self._max_points:]
                             self._calibration._screen_points = self._calibration._screen_points[-self._max_points:]
 
