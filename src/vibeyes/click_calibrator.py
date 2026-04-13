@@ -4,11 +4,40 @@ Uses a CGEventTap on the main thread to capture mouse clicks globally.
 Requires Accessibility permission (System Settings > Privacy & Security > Accessibility).
 """
 
+import sys
+import time
+
 import Quartz
 
 from vibeyes import GazeRatio, Point
 from vibeyes.calibration import Calibration
 from vibeyes.metrics import MetricsTracker
+
+
+def _ensure_accessibility_permission():
+    """Check for Accessibility permission and prompt the user if needed."""
+    if sys.platform != "darwin":
+        return True
+
+    from ApplicationServices import AXIsProcessTrusted, AXIsProcessTrustedWithOptions
+
+    if AXIsProcessTrusted():
+        return True
+
+    # Prompt the user -- macOS will show a system dialog
+    print("  Requesting Accessibility permission for click tracking...")
+    AXIsProcessTrustedWithOptions({"AXTrustedCheckOptionPrompt": True})
+
+    print("  Please grant permission in the system dialog, then wait...")
+    for _ in range(30):
+        time.sleep(1)
+        if AXIsProcessTrusted():
+            print("  Accessibility permission granted!")
+            return True
+
+    print("  Permission not granted. Click calibration will be disabled.")
+    print("  You can grant it later in System Settings > Privacy & Security > Accessibility")
+    return False
 
 
 class ClickCalibrator:
@@ -31,6 +60,10 @@ class ClickCalibrator:
 
     def start(self):
         """Create the CGEventTap on the current (main) thread."""
+        if not _ensure_accessibility_permission():
+            print("  [click-cal] Skipping click calibration (no Accessibility permission)")
+            return
+
         def callback(proxy, event_type, event, refcon):
             if event_type in (Quartz.kCGEventLeftMouseDown, Quartz.kCGEventRightMouseDown):
                 self._on_click(event)
