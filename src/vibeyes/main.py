@@ -173,8 +173,7 @@ def run_calibration(face_tracker: FaceTracker, gaze_estimator: GazeEstimator, ca
 
 
 def run_tracking(detector: Detector, camera_device: int = 0, dwell_time: float = 0.5,
-                 show_overlay: bool = False, debug: bool = False, click_cal: bool = True,
-                 record: bool = True):
+                 show_overlay: bool = False, debug: bool = False, click_cal: bool = True):
     """Run continuous gaze tracking, printing detected window to terminal."""
     camera = Camera(device=camera_device)
     confirmed_label = None
@@ -184,11 +183,9 @@ def run_tracking(detector: Detector, camera_device: int = 0, dwell_time: float =
     fps_counter = 0
     fps_start = time.time()
 
-    # Frame recorder for autoresearch replay
-    frame_recorder = None
-    if record:
-        frame_recorder = FrameRecorder()
-        print(f"Recording frames to: {frame_recorder.session_dir}")
+    # Frame recorder -- always on
+    frame_recorder = FrameRecorder()
+    print(f"Recording frames to: {frame_recorder.session_dir}")
 
     # Click-based implicit calibration
     click_calibrator = None
@@ -336,7 +333,6 @@ def main():
     parser.add_argument("--dwell", type=float, default=0.5, help="Seconds gaze must stay on new target before switching (default 0.5)")
     parser.add_argument("--overlay", action="store_true", help="Show a red dot overlay where gaze is estimated")
     parser.add_argument("--debug", action="store_true", help="Print raw gaze/screen values every second")
-    parser.add_argument("--no-record", action="store_true", help="Disable frame recording for autoresearch replay")
     parser.add_argument("--list-cameras", action="store_true", help="List available cameras and exit")
     args = parser.parse_args()
 
@@ -396,7 +392,7 @@ def main():
     )
 
     run_tracking(detector, camera_device=camera_device, dwell_time=args.dwell,
-                 show_overlay=args.overlay, debug=args.debug, record=not args.no_record)
+                 show_overlay=args.overlay, debug=args.debug)
     face_tracker.close()
 
 
