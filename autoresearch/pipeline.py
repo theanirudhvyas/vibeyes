@@ -84,7 +84,7 @@ class PipelineState:
 # Feature extraction
 # ============================================================
 
-def extract_gaze_features(frame: np.ndarray, landmarker: FaceLandmarker) -> tuple[float, float, float, float] | None:
+def extract_gaze_features(frame: np.ndarray, landmarker: FaceLandmarker) -> tuple[float, ...] | None:
     h, w = frame.shape[:2]
     rgb = frame[:, :, ::-1]
     image = mp.Image(image_format=mp.ImageFormat.SRGB, data=np.ascontiguousarray(rgb))
@@ -119,8 +119,10 @@ def extract_gaze_features(frame: np.ndarray, landmarker: FaceLandmarker) -> tupl
     rx, ry = eye_ratio(RIGHT_IRIS_CENTER, RIGHT_EYE_INNER_CORNER, RIGHT_EYE_OUTER_CORNER,
                         RIGHT_EYE_TOP, RIGHT_EYE_BOTTOM)
 
-    iris_x = max(0.0, min(1.0, (lx + rx) / 2.0))
-    iris_y = max(0.0, min(1.0, (ly + ry) / 2.0))
+    lx = max(0.0, min(1.0, lx))
+    ly = max(0.0, min(1.0, ly))
+    rx = max(0.0, min(1.0, rx))
+    ry = max(0.0, min(1.0, ry))
 
     # Head pose via solvePnP
     image_points = np.array([
@@ -149,7 +151,7 @@ def extract_gaze_features(frame: np.ndarray, landmarker: FaceLandmarker) -> tupl
         angles, _, _, _, _, _ = cv2.RQDecomp3x3(rmat)
         head_pitch, head_yaw = angles[0], angles[1]
 
-    return iris_x, iris_y, head_yaw, head_pitch
+    return lx, ly, rx, ry, head_yaw, head_pitch
 
 
 # ============================================================
@@ -159,12 +161,13 @@ def extract_gaze_features(frame: np.ndarray, landmarker: FaceLandmarker) -> tupl
 def build_feature_matrix(points: list[tuple[float, ...]]) -> np.ndarray:
     pts = np.array(points)
     n = len(pts)
-    ix, iy = pts[:, 0], pts[:, 1]
-    hx, hy = pts[:, 2], pts[:, 3]
+    lx, ly = pts[:, 0], pts[:, 1]
+    rx, ry = pts[:, 2], pts[:, 3]
+    hx, hy = pts[:, 4], pts[:, 5]
 
     return np.column_stack([
         np.ones(n),
-        ix, iy,
+        lx, ly, rx, ry,
         hx, hy,
     ])
 
@@ -292,14 +295,10 @@ def replay_calibration(frames_dir: str, calibration_clicks: list[dict]) -> Pipel
 def predict(frame: np.ndarray, state: PipelineState) -> tuple[float, float]:
     features = extract_gaze_features(frame, state.landmarker)
     if features is None:
-        if state.smoothed_x is not None:
-            return state.smoothed_x, state.smoothed_y
         return SCREEN_W / 2, SCREEN_H / 2
 
-    iris_x, iris_y, head_yaw, head_pitch = features
-
     raw_x, raw_y = calibration_predict(
-        (iris_x, iris_y, head_yaw, head_pitch), state.coeffs_x, state.coeffs_y,
+        features, state.coeffs_x, state.coeffs_y,
         state.feat_mean, state.feat_std)
 
     final_x = max(0.0, min(SCREEN_W, raw_x))
