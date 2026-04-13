@@ -380,9 +380,8 @@ def main():
             print(f"Loading calibration from {CALIBRATION_PATH}")
             calibration = Calibration.load(CALIBRATION_PATH)
         else:
-            print("No calibration found. Run with --calibrate first.")
-            face_tracker.close()
-            sys.exit(1)
+            print("No calibration found. Running first-time calibration...")
+            calibration = run_calibration(face_tracker, gaze_estimator, camera_device=camera_device)
 
     detector = Detector(
         face_tracker=face_tracker,

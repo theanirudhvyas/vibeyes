@@ -50,7 +50,7 @@ class ClickCalibrator:
     each frame from the tracking loop to process pending events.
     """
 
-    def __init__(self, calibration: Calibration, min_points_to_refit: int = 5, max_points: int = 100,
+    def __init__(self, calibration: Calibration, min_points_to_refit: int = 3, max_points: int = 100,
                  frame_recorder: FrameRecorder | None = None):
         self._calibration = calibration
         self._min_points = min_points_to_refit

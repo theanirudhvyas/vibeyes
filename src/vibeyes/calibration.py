@@ -91,6 +91,34 @@ class Calibration:
         self._coeffs_x = None
         self._coeffs_y = None
 
+    @classmethod
+    def create_default(cls, screen_w: float, screen_h: float) -> "Calibration":
+        """Create a naive default calibration from screen dimensions.
+
+        Maps head yaw/pitch linearly to screen coordinates. Rough but usable
+        as a bootstrap -- click calibration will refine it after ~15 clicks.
+        No explicit calibration step needed.
+        """
+        cal = cls()
+        # Simulate a 4x4 grid of gaze/head pose combinations
+        # Head yaw typically ranges [-15, 15] degrees across a screen
+        # Head pitch typically ranges [-10, 10] degrees
+        # Iris ratios range [0.3, 0.7] for typical eye movement
+        for iy, sy_frac in enumerate([0.1, 0.37, 0.63, 0.9]):
+            for ix, sx_frac in enumerate([0.1, 0.37, 0.63, 0.9]):
+                iris_x = 0.3 + 0.4 * sx_frac
+                iris_y = 0.3 + 0.4 * sy_frac
+                head_yaw = -15 + 30 * sx_frac
+                head_pitch = -10 + 20 * sy_frac
+                screen_x = screen_w * sx_frac
+                screen_y = screen_h * sy_frac
+                cal.add_point(
+                    GazeRatio(x=iris_x, y=iris_y, head_x=head_yaw, head_y=head_pitch),
+                    Point(x=screen_x, y=screen_y),
+                )
+        cal.fit()
+        return cal
+
     @staticmethod
     def _build_feature_matrix(points: list[tuple[float, ...]]) -> np.ndarray:
         """Build feature matrix from gaze features.
