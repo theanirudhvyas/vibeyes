@@ -11,6 +11,7 @@ import numpy as np
 from vibeyes import GazeRatio, Point
 from vibeyes.calibration import Calibration
 from vibeyes.camera import Camera, list_cameras, select_camera_interactive
+from vibeyes.click_calibrator import ClickCalibrator
 from vibeyes.detector import Detector
 from vibeyes.face_tracker import FaceTracker
 from vibeyes.gaze_estimator import GazeEstimator
@@ -170,15 +171,26 @@ def run_calibration(face_tracker: FaceTracker, gaze_estimator: GazeEstimator, ca
     return calibration
 
 
-def run_tracking(detector: Detector, camera_device: int = 0, dwell_time: float = 0.5, show_overlay: bool = False, debug: bool = False):
+def run_tracking(detector: Detector, camera_device: int = 0, dwell_time: float = 0.5,
+                 show_overlay: bool = False, debug: bool = False, click_cal: bool = True):
     """Run continuous gaze tracking, printing detected window to terminal."""
     camera = Camera(device=camera_device)
-    confirmed_label = None  # the label we've committed to displaying
-    candidate_label = None  # a new label we're considering switching to
-    candidate_since = 0.0   # when we first saw the candidate
+    confirmed_label = None
+    candidate_label = None
+    candidate_since = 0.0
 
     fps_counter = 0
     fps_start = time.time()
+
+    # Click-based implicit calibration
+    click_calibrator = None
+    if click_cal:
+        try:
+            click_calibrator = ClickCalibrator(detector.calibration)
+            click_calibrator.start()
+            print("Click calibration enabled (clicks refine accuracy over time)")
+        except Exception as e:
+            print(f"Could not start click calibrator: {e}")
 
     # Gaze overlay
     overlay = None
@@ -208,6 +220,11 @@ def run_tracking(detector: Detector, camera_device: int = 0, dwell_time: float =
             except RuntimeError as e:
                 print(f"Error: {e}")
                 break
+
+            # Feed current gaze to click calibrator
+            if click_calibrator and detector.last_gaze_ratio:
+                click_calibrator.update_gaze(detector.last_gaze_ratio)
+                click_calibrator.check_refit()
 
             # Update overlay with raw gaze position (before hysteresis)
             if overlay and detector.last_screen_point:
@@ -287,6 +304,12 @@ def run_tracking(detector: Detector, camera_device: int = 0, dwell_time: float =
     except KeyboardInterrupt:
         print("\nStopped.")
     finally:
+        if click_calibrator:
+            click_calibrator.stop()
+            # Save updated calibration with click data
+            if detector.calibration.is_calibrated:
+                detector.calibration.save(CALIBRATION_PATH)
+                print(f"  Calibration saved ({detector.calibration.point_count} points)")
         if overlay:
             overlay.stop()
         camera.release()
