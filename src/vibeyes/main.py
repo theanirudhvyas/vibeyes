@@ -34,27 +34,54 @@ def get_screen_size() -> tuple[int, int]:
         return 1920, 1080
 
 
-def run_calibration(face_tracker: FaceTracker, gaze_estimator: GazeEstimator, camera_device: int = 0) -> Calibration:
-    """Run 9-point calibration using OpenCV windows."""
+def _generate_calibration_points(screen_w: int, screen_h: int, n_points: int = 16) -> list[tuple[int, int]]:
+    """Generate randomized calibration points covering the full screen.
+
+    Starts with a 4x4 grid, then shuffles for randomized order.
+    Extra points are added randomly within the margins.
+    """
+    import random
+
+    margin_x = int(screen_w * 0.05)
+    margin_y = int(screen_h * 0.05)
+    usable_w = screen_w - 2 * margin_x
+    usable_h = screen_h - 2 * margin_y
+
+    # Base grid: 4x4 = 16 points
+    grid_cols = 4
+    grid_rows = 4
+    points = []
+    for row in range(grid_rows):
+        for col in range(grid_cols):
+            x = margin_x + int(col * usable_w / (grid_cols - 1))
+            y = margin_y + int(row * usable_h / (grid_rows - 1))
+            points.append((x, y))
+
+    # If more points requested, add random ones
+    while len(points) < n_points:
+        x = random.randint(margin_x, screen_w - margin_x)
+        y = random.randint(margin_y, screen_h - margin_y)
+        points.append((x, y))
+
+    # Shuffle so the order is random (prevents systematic drift bias)
+    random.shuffle(points)
+    return points[:n_points]
+
+
+def run_calibration(face_tracker: FaceTracker, gaze_estimator: GazeEstimator, camera_device: int = 0, n_points: int = 16) -> Calibration:
+    """Run calibration using OpenCV windows."""
     screen_w, screen_h = get_screen_size()
     calibration = Calibration()
     camera = Camera(device=camera_device)
 
-    # Warm up camera -- first few frames are often black/green
+    # Warm up camera
     print("Warming up camera...")
     for _ in range(30):
         camera.read()
         time.sleep(0.03)
 
-    # 3x3 grid of calibration points with 10% margin
-    margin_x = int(screen_w * 0.1)
-    margin_y = int(screen_h * 0.1)
-    points = []
-    for row in range(3):
-        for col in range(3):
-            x = margin_x + col * (screen_w - 2 * margin_x) // 2
-            y = margin_y + row * (screen_h - 2 * margin_y) // 2
-            points.append((x, y))
+    points = _generate_calibration_points(screen_w, screen_h, n_points)
+    print(f"Calibrating with {len(points)} randomized points...")
 
     cv2.namedWindow("VibEyes Calibration", cv2.WINDOW_NORMAL)
     cv2.setWindowProperty("VibEyes Calibration", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
