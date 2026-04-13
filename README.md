@@ -2,7 +2,7 @@
 
 Webcam-based gaze tracking that detects which macOS window (and zellij pane) you're looking at.
 
-## Quick Start
+## Setup
 
 ```bash
 make setup          # Create venv, install deps, download model
@@ -10,98 +10,88 @@ make calibrate      # 16-point calibration (look at dots, press SPACE)
 make run-overlay    # Track with gaze dot overlay
 ```
 
-## Commands
+Multiple cameras? Use `make calibrate CAMERA=1` (shows preview to pick the right one).
 
-| Command | What it does |
-|---------|-------------|
-| `make setup` | Install Python 3.12 venv + dependencies + MediaPipe model |
-| `make calibrate` | Run 16-point calibration with overlay |
-| `make run` | Track gaze, print detected window to terminal |
-| `make run-overlay` | Track with translucent gaze dot on screen |
-| `make run-debug` | Track with overlay + debug output (gaze ratios, screen coords) |
-| `make record` | Track + record frames for autoresearch (same as run-debug) |
-| `make list-cameras` | List available cameras |
-| `make test` | Run all tests |
-| `make metrics` | Show accuracy stats from click tracking |
-| `make autoresearch-recordings` | List recorded sessions and click counts |
-| `make autoresearch-baseline` | Run autoresearch baseline evaluation |
-
-### Camera Selection
-
-If you have multiple cameras, specify which one:
+## Developer Setup
 
 ```bash
-make calibrate CAMERA=1
-make run-overlay CAMERA=1
+make setup          # venv + deps + model
+make test           # 52 tests, all should pass
+make run-debug      # overlay + debug output (gaze ratios, screen coords, fps)
+make metrics        # show click accuracy stats from SQLite
 ```
 
-## How It Works
+To collect data for the autoresearch accuracy optimizer:
+```bash
+make run-overlay                 # use normally, frames auto-record on every click
+make autoresearch-recordings     # check click counts (need 30+)
+make autoresearch-baseline       # run baseline evaluation
+cd autoresearch && claude        # start autonomous experiment loop
+```
+
+See `autoresearch/program.md` for the full experiment loop spec.
+
+## Reference
+
+### Pipeline
 
 ```
-Webcam (640x480, 30fps)
-  -> MediaPipe Face Landmarker (478 landmarks + iris)
-  -> Iris ratio (position within eye bounds)
-  -> 3D head pose via solvePnP (yaw, pitch)
-  -> Polynomial calibration (gaze features -> screen coords)
-  -> Median filter + EMA smoothing
-  -> CGWindowListCopyWindowInfo -> window hit-test
-  -> Zellij pane detection (if terminal window)
+Webcam (640x480) -> MediaPipe Face Landmarker (478 landmarks + iris)
+  -> Iris ratio + 3D head pose (solvePnP yaw/pitch)
+  -> Polynomial calibration -> Median filter + EMA smoothing
+  -> CGWindowListCopyWindowInfo hit-test -> Zellij pane detection
 ```
 
 ### Calibration
 
-1. **Initial**: 16 randomized dots, look at each + press SPACE
-2. **Implicit**: Every mouse click refines the model (you look where you click)
-3. **Persistent**: Calibration + click data saved across sessions
+- **Initial**: 16 randomized dots on screen, look + press SPACE for each
+- **Implicit**: every mouse click silently refines the model (you look where you click)
+- **Persistent**: saved across sessions to `calibration.json`
+- **Blink-safe**: gaze freezes during blinks (Eye Aspect Ratio detection)
 
-### Permissions Required
+### Permissions
 
-- **Camera**: prompted automatically on first run
-- **Accessibility**: prompted automatically for click tracking (System Settings > Privacy & Security > Accessibility)
+Both prompted automatically on first run:
+- **Camera** -- core functionality
+- **Accessibility** -- click tracking for implicit calibration
 
-## Autoresearch
+### All Make Targets
 
-An autonomous experimentation system that replays recorded webcam frames through a modifiable gaze pipeline to optimize accuracy.
+Run `make` to see the full list. Key ones:
 
-```bash
-# 1. Record data (click around normally for 30+ minutes)
-make record
+| Target | Purpose |
+|--------|---------|
+| `make setup` | Install everything |
+| `make calibrate` | 16-point calibration |
+| `make run` | Track, terminal output only |
+| `make run-overlay` | Track with gaze dot |
+| `make run-debug` | Track + overlay + debug values |
+| `make test` | Run pytest suite |
+| `make metrics` | Click accuracy stats |
+| `make autoresearch-baseline` | Evaluate pipeline on recorded data |
 
-# 2. Check recordings
-make autoresearch-recordings
-
-# 3. Run baseline
-make autoresearch-baseline
-
-# 4. Start the autonomous loop (in a separate Claude Code session)
-cd autoresearch && read program.md
-```
-
-See `autoresearch/program.md` for full details.
-
-## Project Structure
+### Project Structure
 
 ```
 src/vibeyes/
-  main.py              # Entry point + CLI
-  camera.py            # Webcam capture + camera selection
-  face_tracker.py      # MediaPipe face/iris landmark detection + 3D head pose
-  gaze_estimator.py    # Iris ratio + head pose -> gaze features
-  calibration.py       # Polynomial regression gaze -> screen mapping
-  detector.py          # Pipeline orchestrator (median + EMA smoothing)
-  window_tracker.py    # macOS window enumeration + hit testing
-  pane_tracker.py      # Zellij pane detection from layout dump
-  overlay.py           # Transparent Cocoa NSWindow gaze dot
-  click_calibrator.py  # CGEventTap click monitoring + implicit recalibration
-  frame_recorder.py    # Save webcam frames on click for offline replay
-  metrics.py           # SQLite accuracy tracking (predicted vs actual)
+  main.py              Entry point + CLI
+  camera.py            Webcam capture + camera selection
+  face_tracker.py      MediaPipe landmarks + 3D head pose (solvePnP)
+  gaze_estimator.py    Iris ratio + head pose -> gaze features + blink detection
+  calibration.py       Polynomial regression (gaze -> screen coords)
+  detector.py          Pipeline orchestrator (median + EMA smoothing)
+  window_tracker.py    macOS window enumeration (Quartz) + hit testing
+  pane_tracker.py      Zellij pane detection (parses dump-layout)
+  overlay.py           Transparent Cocoa NSWindow gaze dot
+  click_calibrator.py  CGEventTap click capture + implicit recalibration
+  frame_recorder.py    Save frames on click for offline replay
+  metrics.py           SQLite accuracy tracking (predicted vs actual)
 
 autoresearch/
-  prepare.py           # Read-only evaluation harness
-  pipeline.py          # Agent-editable gaze pipeline
-  program.md           # Autonomous experiment loop instructions
+  prepare.py           Read-only eval harness (loads recordings, measures error)
+  pipeline.py          Agent-editable gaze pipeline (modify to improve accuracy)
+  program.md           Autonomous experiment loop instructions
 
-tests/                 # 52 tests (pytest)
-models/                # MediaPipe face_landmarker.task (gitignored)
-PRD.md                 # Product requirements document
+tests/                 52 tests (pytest)
+models/                face_landmarker.task (gitignored, downloaded by make setup)
 ```
