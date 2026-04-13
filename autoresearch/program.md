@@ -34,35 +34,42 @@ Each experiment replays recorded webcam frames through your modified pipeline.
 - You cannot install new packages beyond what's in the vibeyes pyproject.toml
   (mediapipe, opencv-python, numpy are available; also scipy if added)
 
-**The goal: minimize avg_error_px.** Lower = better.
+**The goal: minimize median_error_px.** Lower = better. Median is used instead
+of mean because it's robust to outlier clicks where the user wasn't looking at
+the click target.
 
 ## Output format
 
 The script prints metrics like:
 ```
 ---
-avg_error_px:    234.5
 median_error_px: 198.3
+avg_error_px:    234.5
 p90_error_px:    412.7
 min_error_px:    12.1
 max_error_px:    891.2
 n_test_clicks:   45
+
+Per-region median error (3x3 grid):
+  TL:   312.4  TC:   198.3  TR:   445.1
+  ML:   156.2  MC:   123.4  MR:   234.5
+  BL:   567.8  BC:   345.6  BR:   456.7
 ---
 ```
 
-Extract the key metric: `grep "^avg_error_px:" run.log`
+Extract the key metric: `grep "^median_error_px:" run.log`
 
 ## Logging results
 
 Log to `results.tsv` (tab-separated). Header and columns:
 
 ```
-commit	avg_error_px	median_error_px	status	description
+commit	median_error_px	avg_error_px	status	description
 ```
 
 1. git commit hash (short, 7 chars)
-2. avg_error_px (e.g. 234.5) — use 0.0 for crashes
-3. median_error_px (e.g. 198.3) — use 0.0 for crashes
+2. median_error_px (e.g. 198.3) — THE PRIMARY METRIC — use 0.0 for crashes
+3. avg_error_px (e.g. 234.5) — use 0.0 for crashes
 4. status: `keep`, `discard`, or `crash`
 5. short description of what the experiment tried
 
@@ -77,8 +84,8 @@ LOOP FOREVER:
 5. Read results: `grep "^avg_error_px:\|^median_error_px:" run.log`
 6. If grep empty → crash. Check `tail -n 50 run.log` for the error.
 7. Record results in results.tsv (do NOT commit results.tsv)
-8. If avg_error_px improved (lower): keep the commit
-9. If avg_error_px equal or worse: `git reset --hard` to discard
+8. If median_error_px improved (lower): keep the commit
+9. If median_error_px equal or worse: `git reset --hard` to discard
 
 **NEVER STOP.** The human may be asleep. Each experiment takes ~30-60 seconds,
 so you can run ~60-120 experiments per hour.

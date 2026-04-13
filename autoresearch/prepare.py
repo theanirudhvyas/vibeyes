@@ -74,26 +74,45 @@ def split_session(session: dict) -> tuple[list[dict], list[dict]]:
 
 
 def evaluate(predictions: list[tuple[float, float]],
-             actuals: list[tuple[float, float]]) -> dict:
-    """Compute accuracy metrics."""
+             actuals: list[tuple[float, float]],
+             screen_w: float = 3360.0,
+             screen_h: float = 2100.0) -> dict:
+    """Compute accuracy metrics including per-region breakdown."""
     assert len(predictions) == len(actuals), \
         f"Length mismatch: {len(predictions)} predictions vs {len(actuals)} actuals"
 
     errors = []
+    region_errors = {name: [] for name in [
+        "TL", "TC", "TR", "ML", "MC", "MR", "BL", "BC", "BR"]}
+
     for (px, py), (ax, ay) in zip(predictions, actuals):
         err = math.sqrt((px - ax) ** 2 + (py - ay) ** 2)
         errors.append(err)
 
+        col = min(2, int(ax / (screen_w / 3)))
+        row = min(2, int(ay / (screen_h / 3)))
+        region_name = ["TL", "TC", "TR", "ML", "MC", "MR", "BL", "BC", "BR"][row * 3 + col]
+        region_errors[region_name].append(err)
+
     errors.sort()
     n = len(errors)
 
+    region_medians = {}
+    for name, errs in region_errors.items():
+        if errs:
+            errs.sort()
+            region_medians[name] = errs[len(errs) // 2]
+        else:
+            region_medians[name] = None
+
     return {
+        "median_error_px": errors[n // 2],   # PRIMARY METRIC
         "avg_error_px": sum(errors) / n,
-        "median_error_px": errors[n // 2],
         "p90_error_px": errors[int(n * 0.9)],
         "min_error_px": errors[0],
         "max_error_px": errors[-1],
         "n_test_clicks": n,
+        "region_errors": region_medians,
     }
 
 
@@ -130,12 +149,20 @@ def run_evaluation():
     metrics = evaluate(all_predictions, all_actuals)
 
     print("\n---")
-    print(f"avg_error_px:    {metrics['avg_error_px']:.1f}")
     print(f"median_error_px: {metrics['median_error_px']:.1f}")
+    print(f"avg_error_px:    {metrics['avg_error_px']:.1f}")
     print(f"p90_error_px:    {metrics['p90_error_px']:.1f}")
     print(f"min_error_px:    {metrics['min_error_px']:.1f}")
     print(f"max_error_px:    {metrics['max_error_px']:.1f}")
     print(f"n_test_clicks:   {metrics['n_test_clicks']}")
+
+    r = metrics["region_errors"]
+    def _fmt(v):
+        return f"{v:.1f}" if v is not None else "n/a"
+    print(f"\nPer-region median error (3x3 grid):")
+    print(f"  TL: {_fmt(r['TL']):>7s}  TC: {_fmt(r['TC']):>7s}  TR: {_fmt(r['TR']):>7s}")
+    print(f"  ML: {_fmt(r['ML']):>7s}  MC: {_fmt(r['MC']):>7s}  MR: {_fmt(r['MR']):>7s}")
+    print(f"  BL: {_fmt(r['BL']):>7s}  BC: {_fmt(r['BC']):>7s}  BR: {_fmt(r['BR']):>7s}")
     print("---")
 
 
