@@ -126,6 +126,11 @@ models/                face_landmarker.task (gitignored, downloaded by make setu
 | Autoresearch autonomous accuracy optimizer | Done |
 | macOS permission handling (Camera, Accessibility) | Done |
 | Improve gaze accuracy (currently 750-2200px error) | Pending |
+| L2CS-Net or similar dedicated gaze estimation model (ONNX) | Pending |
+| Posture-invariant tracking (lap vs desk vs standing) | Pending |
+| Auto-detect posture change and trigger recalibration | Pending |
+| Camera angle normalization (perspective correction) | Pending |
+| External webcam support (different FOVs and positions) | Pending |
 | Menu bar app with camera status indicator | Pending |
 | Auto-raise gazed window after sustained attention | Pending |
 | Attention analytics (time per app) | Pending |

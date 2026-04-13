@@ -253,9 +253,29 @@ The richest interaction model combines both: use gaze to select the target, faci
 | **Camera quality** | Lower resolution = fewer eye pixels | Minimum 720p required, 1080p recommended |
 | **Viewing distance** | >80cm significantly degrades accuracy | Guide user to optimal 40-70cm range |
 | **Calibration drift** | Posture changes invalidate calibration | Implicit recalibration via mouse clicks |
+| **Posture/angle changes** | Laptop on lap vs desk vs standing completely changes camera-face geometry, invalidating calibration | Posture detection + per-posture calibration profiles (see below) |
+| **External webcam position** | Different FOV, distance, and angle than built-in camera | Per-camera calibration profiles, camera intrinsic detection |
 | **Natural face movements** | Talking, yawning can trigger facial gestures | Temporal filtering, cooldown periods, compound gestures |
 | **Hand visibility** | Hands must be in camera FOV for hand gestures | Guide users on optimal hand position; facial gestures as fallback |
 | **CPU load with hand tracking** | Running face + hand models together increases load | Lazy-load hand model only when hand gesture mode is enabled |
+
+### 3.6 Posture Invariance
+
+A major usability challenge: calibration is only valid for the specific posture and camera angle at calibration time. Moving the laptop from a desk to your lap, adjusting screen tilt, or switching to an external monitor with a webcam all invalidate the calibration.
+
+**Why it matters:** Users change posture constantly -- leaning back, scooting forward, tilting the screen. If the system requires recalibration every time, it's unusable.
+
+**Approaches to solve this (in order of increasing sophistication):**
+
+| Approach | How It Works | Complexity |
+|----------|-------------|------------|
+| **Auto-detect drift + prompt recal** | Monitor click calibration error; if recent avg exceeds threshold, prompt "accuracy degraded, recalibrate?" | Low |
+| **Per-posture calibration profiles** | Detect posture class (desk/lap/standing) from head pose baseline (pitch angle), auto-switch between saved calibration profiles | Medium |
+| **Perspective normalization** | Use the 3D face mesh to compute a virtual "frontal" face, normalizing out camera angle. Gaze features computed on the normalized face are posture-independent. | Medium-High |
+| **Learn posture-invariant features** | Train a model (or use L2CS-Net) that takes the raw face image and predicts gaze direction in world coordinates, independent of camera angle. Calibration then maps world-gaze to screen coords. | High |
+| **Continuous adaptation** | Treat every click as a streaming calibration point. Use online learning (incremental ridge regression) that continuously adapts to posture changes without explicit recalibration. | Medium |
+
+**Recommended path:** Start with auto-detect drift (low effort, immediate value), then add perspective normalization or a dedicated gaze model. The continuous adaptation approach via click calibration is already partially implemented and will naturally improve with more data.
 
 ---
 
