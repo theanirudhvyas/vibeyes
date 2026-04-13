@@ -76,20 +76,8 @@ class PipelineState:
     landmarker: FaceLandmarker
     coeffs_x: np.ndarray
     coeffs_y: np.ndarray
-    prev_gaze_x: float | None = None
-    prev_gaze_y: float | None = None
-    prev_head_yaw: float | None = None
-    prev_head_pitch: float | None = None
-    history_x: deque = None
-    history_y: deque = None
-    smoothed_x: float | None = None
-    smoothed_y: float | None = None
-
-    def __post_init__(self):
-        if self.history_x is None:
-            self.history_x = deque(maxlen=MEDIAN_WINDOW)
-        if self.history_y is None:
-            self.history_y = deque(maxlen=MEDIAN_WINDOW)
+    feat_mean: np.ndarray = None
+    feat_std: np.ndarray = None
 
 
 # ============================================================
@@ -187,20 +175,28 @@ RIDGE_ALPHA = 0.3
 
 def fit_calibration(gaze_points, screen_points):
     A = build_feature_matrix(gaze_points)
+    # Z-score normalize (skip column 0 which is the bias/ones column)
+    feat_mean = A[:, 1:].mean(axis=0)
+    feat_std = A[:, 1:].std(axis=0)
+    feat_std[feat_std < 1e-8] = 1.0  # avoid division by zero
+    A_norm = A.copy()
+    A_norm[:, 1:] = (A[:, 1:] - feat_mean) / feat_std
+
     screen = np.array(screen_points)
     # Ridge regression: (A^T A + alpha*I)^-1 A^T y
-    ATA = A.T @ A
+    ATA = A_norm.T @ A_norm
     reg = RIDGE_ALPHA * np.eye(ATA.shape[0])
     ATA_reg = ATA + reg
-    ATy_x = A.T @ screen[:, 0]
-    ATy_y = A.T @ screen[:, 1]
+    ATy_x = A_norm.T @ screen[:, 0]
+    ATy_y = A_norm.T @ screen[:, 1]
     coeffs_x = np.linalg.solve(ATA_reg, ATy_x)
     coeffs_y = np.linalg.solve(ATA_reg, ATy_y)
-    return coeffs_x, coeffs_y
+    return coeffs_x, coeffs_y, feat_mean, feat_std
 
 
-def calibration_predict(gaze_features, coeffs_x, coeffs_y):
+def calibration_predict(gaze_features, coeffs_x, coeffs_y, feat_mean, feat_std):
     features = build_feature_matrix([gaze_features])
+    features[:, 1:] = (features[:, 1:] - feat_mean) / feat_std
     sx = float((features @ coeffs_x)[0])
     sy = float((features @ coeffs_y)[0])
     return sx, sy
@@ -284,12 +280,14 @@ def replay_calibration(frames_dir: str, calibration_clicks: list[dict]) -> Pipel
             f"(need {MIN_CALIBRATION_POINTS}). Record more data."
         )
 
-    coeffs_x, coeffs_y = fit_calibration(gaze_points, screen_points)
+    coeffs_x, coeffs_y, feat_mean, feat_std = fit_calibration(gaze_points, screen_points)
 
     return PipelineState(
         landmarker=landmarker,
         coeffs_x=coeffs_x,
         coeffs_y=coeffs_y,
+        feat_mean=feat_mean,
+        feat_std=feat_std,
     )
 
 
@@ -303,7 +301,8 @@ def predict(frame: np.ndarray, state: PipelineState) -> tuple[float, float]:
     iris_x, iris_y, head_yaw, head_pitch = features
 
     raw_x, raw_y = calibration_predict(
-        (iris_x, iris_y, head_yaw, head_pitch), state.coeffs_x, state.coeffs_y)
+        (iris_x, iris_y, head_yaw, head_pitch), state.coeffs_x, state.coeffs_y,
+        state.feat_mean, state.feat_std)
 
     final_x = max(0.0, min(SCREEN_W, raw_x))
     final_y = max(0.0, min(SCREEN_H, raw_y))
