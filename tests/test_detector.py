@@ -5,7 +5,7 @@ from unittest.mock import MagicMock
 import numpy as np
 import pytest
 
-from vibeyes import EyeData, FaceData, GazeRatio, Point, WindowInfo
+from vibeyes import EyeData, FaceData, GazeRatio, HeadPose, Point, WindowInfo
 from vibeyes.detector import Detector
 
 
@@ -55,6 +55,7 @@ class TestDetector:
                     Point(0.3, 0.45), Point(0.3, 0.55),
                 ),
                 nose_tip=Point(0.5, 0.5),
+                head_pose=HeadPose(yaw=0.0, pitch=0.0, roll=0.0),
             ),
             gaze_ratio=GazeRatio(0.5, 0.5),
             screen_point=Point(480, 300),
@@ -86,6 +87,7 @@ class TestDetector:
                     Point(0.3, 0.45), Point(0.3, 0.55),
                 ),
                 nose_tip=Point(0.5, 0.5),
+                head_pose=HeadPose(yaw=0.0, pitch=0.0, roll=0.0),
             ),
             gaze_ratio=GazeRatio(0.9, 0.9),
             screen_point=Point(5000, 5000),  # way off screen
@@ -108,6 +110,7 @@ class TestDetector:
                     Point(0.3, 0.45), Point(0.3, 0.55),
                 ),
                 nose_tip=Point(0.5, 0.5),
+                head_pose=HeadPose(yaw=0.0, pitch=0.0, roll=0.0),
             ),
             is_calibrated=False,
         )
@@ -127,6 +130,7 @@ class TestDetector:
                 Point(0.3, 0.45), Point(0.3, 0.55),
             ),
             nose_tip=Point(0.5, 0.5),
+            head_pose=HeadPose(yaw=0.0, pitch=0.0, roll=0.0),
         )
         window = WindowInfo("VS Code", "Code", (0, 0, 1920, 1080), 100, 0)
         detector = _make_mock_detector(

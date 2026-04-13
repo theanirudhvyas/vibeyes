@@ -23,7 +23,7 @@ from Cocoa import NSWindowCollectionBehaviorCanJoinAllSpaces, NSWindowCollection
 import objc
 
 
-OVERLAY_SIZE = 30
+OVERLAY_SIZE = 20
 
 
 class GazeDotView(NSView):
@@ -37,21 +37,20 @@ class GazeDotView(NSView):
         NSColor.clearColor().set()
         NSBezierPath.fillRect_(rect)
 
-        # Outer ring
-        ring = NSBezierPath.bezierPathWithOvalInRect_(
+        # Soft translucent dot
+        dot = NSBezierPath.bezierPathWithOvalInRect_(
             NSMakeRect(2, 2, rect.size.width - 4, rect.size.height - 4)
         )
-        NSColor.colorWithCalibratedRed_green_blue_alpha_(1.0, 0.2, 0.2, 0.7).set()
-        ring.setLineWidth_(3.0)
-        ring.stroke()
+        NSColor.colorWithCalibratedRed_green_blue_alpha_(0.3, 0.6, 1.0, 0.3).set()
+        dot.fill()
 
-        # Center dot
-        cs = 8
+        # Subtle center point
+        cs = 4
         cx = (rect.size.width - cs) / 2
         cy = (rect.size.height - cs) / 2
-        dot = NSBezierPath.bezierPathWithOvalInRect_(NSMakeRect(cx, cy, cs, cs))
-        NSColor.colorWithCalibratedRed_green_blue_alpha_(1.0, 0.1, 0.1, 0.9).set()
-        dot.fill()
+        center = NSBezierPath.bezierPathWithOvalInRect_(NSMakeRect(cx, cy, cs, cs))
+        NSColor.colorWithCalibratedRed_green_blue_alpha_(0.2, 0.5, 1.0, 0.5).set()
+        center.fill()
 
 
 class GazeOverlay:

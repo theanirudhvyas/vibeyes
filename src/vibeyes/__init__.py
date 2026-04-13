@@ -21,11 +21,20 @@ class EyeData:
 
 
 @dataclass
+class HeadPose:
+    """Head orientation from 3D face mesh via solvePnP."""
+    yaw: float    # left/right rotation in degrees (negative=left, positive=right)
+    pitch: float  # up/down rotation in degrees (negative=up, positive=down)
+    roll: float   # tilt in degrees
+
+
+@dataclass
 class FaceData:
     """Extracted face tracking data for gaze estimation."""
     left_eye: EyeData
     right_eye: EyeData
-    nose_tip: Point  # face center reference for head pose signal
+    nose_tip: Point
+    head_pose: HeadPose
 
 
 @dataclass
@@ -33,12 +42,12 @@ class GazeRatio:
     """Gaze features for calibration mapping.
 
     iris_x, iris_y: iris position ratio within eye (0-1)
-    head_x, head_y: nose tip position in frame (0-1), captures head pose
+    head_yaw, head_pitch: head rotation angles from 3D mesh (degrees)
     """
-    x: float  # combined/primary x signal
-    y: float  # combined/primary y signal
-    head_x: float = 0.5  # nose x position (head pose)
-    head_y: float = 0.5  # nose y position (head pose)
+    x: float       # iris x ratio
+    y: float       # iris y ratio
+    head_x: float = 0.0  # head yaw in degrees
+    head_y: float = 0.0  # head pitch in degrees
 
 
 @dataclass

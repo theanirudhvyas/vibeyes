@@ -2,7 +2,7 @@
 
 import pytest
 
-from vibeyes import EyeData, FaceData, GazeRatio, Point
+from vibeyes import EyeData, FaceData, GazeRatio, HeadPose, Point
 from vibeyes.gaze_estimator import GazeEstimator
 
 
@@ -48,6 +48,7 @@ class TestGazeEstimator:
                 bottom=Point(0.3, 0.55),
             ),
             nose_tip=Point(0.5, 0.5),
+            head_pose=HeadPose(yaw=0.0, pitch=0.0, roll=0.0),
         )
         estimator = GazeEstimator()
         ratio = estimator.estimate(face_data)
@@ -75,6 +76,7 @@ class TestGazeEstimator:
                 bottom=Point(0.3, 0.55),
             ),
             nose_tip=Point(0.5, 0.5),
+            head_pose=HeadPose(yaw=0.0, pitch=0.0, roll=0.0),
         )
         estimator = GazeEstimator()
         ratio = estimator.estimate(face_data)
@@ -101,6 +103,7 @@ class TestGazeEstimator:
                 bottom=Point(0.3, 0.55),
             ),
             nose_tip=Point(0.5, 0.5),
+            head_pose=HeadPose(yaw=0.0, pitch=0.0, roll=0.0),
         )
         r1 = estimator.estimate(center_face)
 
@@ -121,6 +124,7 @@ class TestGazeEstimator:
                 bottom=Point(0.3, 0.55),
             ),
             nose_tip=Point(0.5, 0.5),
+            head_pose=HeadPose(yaw=0.0, pitch=0.0, roll=0.0),
         )
         r2 = estimator.estimate(right_face)
 
@@ -148,6 +152,7 @@ class TestGazeEstimator:
                 bottom=Point(0.3, 0.55),
             ),
             nose_tip=Point(0.5, 0.5),
+            head_pose=HeadPose(yaw=0.0, pitch=0.0, roll=0.0),
         )
         ratio = estimator.estimate(center_face)
         assert abs(ratio.x - 0.5) < 0.05

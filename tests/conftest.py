@@ -5,7 +5,7 @@ import os
 import numpy as np
 import pytest
 
-from vibeyes import EyeData, FaceData, GazeRatio, Point, WindowInfo
+from vibeyes import EyeData, FaceData, GazeRatio, HeadPose, Point, WindowInfo
 
 MODEL_PATH = os.path.join(os.path.dirname(__file__), "..", "models", "face_landmarker.task")
 
@@ -43,6 +43,7 @@ def mock_face_data():
             bottom=Point(0.3, 0.55),
         ),
         nose_tip=Point(0.5, 0.5),
+        head_pose=HeadPose(yaw=0.0, pitch=0.0, roll=0.0),
     )
 
 
@@ -65,6 +66,7 @@ def mock_face_data_looking_left():
             bottom=Point(0.3, 0.55),
         ),
         nose_tip=Point(0.55, 0.5),
+        head_pose=HeadPose(yaw=-5.0, pitch=0.0, roll=0.0),
     )
 
 
@@ -87,6 +89,7 @@ def mock_face_data_looking_right():
             bottom=Point(0.3, 0.55),
         ),
         nose_tip=Point(0.45, 0.5),
+        head_pose=HeadPose(yaw=5.0, pitch=0.0, roll=0.0),
     )
 
 
