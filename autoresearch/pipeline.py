@@ -141,7 +141,7 @@ def extract_gaze_features(frame: np.ndarray, landmarker: FaceLandmarker) -> tupl
 
     success, rvec, tvec = cv2.solvePnP(
         FACE_3D_MODEL, image_points, cam_matrix, dist_coeffs,
-        flags=cv2.SOLVEPNP_ITERATIVE,
+        flags=cv2.SOLVEPNP_SQPNP,
     )
 
     if not success:
