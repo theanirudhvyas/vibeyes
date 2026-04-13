@@ -193,10 +193,12 @@ def _ridge_fit(A, y, alpha):
     return np.linalg.solve(ATA + reg, A.T @ y)
 
 
-def fit_calibration(gaze_points, screen_points):
+OUTLIER_THRESHOLD = 2.0  # remove points with residual > threshold * median residual
+
+def _fit_normalized(gaze_points, screen_points):
+    """Single fit with normalization, returns coeffs and norms."""
     Ax = build_feature_matrix_x(gaze_points)
     Ay = build_feature_matrix_y(gaze_points)
-    # Z-score normalize each
     mean_x = Ax[:, 1:].mean(axis=0)
     std_x = Ax[:, 1:].std(axis=0)
     std_x[std_x < 1e-8] = 1.0
@@ -213,6 +215,30 @@ def fit_calibration(gaze_points, screen_points):
     coeffs_x = _ridge_fit(Ax_norm, screen[:, 0], RIDGE_ALPHA)
     coeffs_y = _ridge_fit(Ay_norm, screen[:, 1], RIDGE_ALPHA)
     return coeffs_x, coeffs_y, (mean_x, std_x), (mean_y, std_y)
+
+
+def fit_calibration(gaze_points, screen_points):
+    # First fit
+    coeffs_x, coeffs_y, norm_x, norm_y = _fit_normalized(gaze_points, screen_points)
+
+    # Compute residuals
+    screen = np.array(screen_points)
+    residuals = []
+    for i, gp in enumerate(gaze_points):
+        px, py = calibration_predict(gp, coeffs_x, coeffs_y, norm_x, norm_y)
+        err = math.sqrt((px - screen[i, 0])**2 + (py - screen[i, 1])**2)
+        residuals.append(err)
+    residuals = np.array(residuals)
+    median_res = np.median(residuals)
+
+    # Remove outliers
+    mask = residuals <= OUTLIER_THRESHOLD * median_res
+    if mask.sum() >= MIN_CALIBRATION_POINTS:
+        filtered_gaze = [gp for gp, m in zip(gaze_points, mask) if m]
+        filtered_screen = [sp for sp, m in zip(screen_points, mask) if m]
+        coeffs_x, coeffs_y, norm_x, norm_y = _fit_normalized(filtered_gaze, filtered_screen)
+
+    return coeffs_x, coeffs_y, norm_x, norm_y
 
 
 def calibration_predict(gaze_features, coeffs_x, coeffs_y, norm_x, norm_y):
