@@ -164,25 +164,29 @@ def extract_gaze_features(frame: np.ndarray, landmarker: FaceLandmarker) -> tupl
 # ============================================================
 
 def build_feature_matrix_x(points: list[tuple[float, ...]]) -> np.ndarray:
-    """Features for predicting screen X: horizontal iris ratios + head yaw + IPD."""
+    """Features for predicting screen X: avg + diff of horizontal iris ratios + head yaw + IPD."""
     pts = np.array(points)
     n = len(pts)
     lx = pts[:, 0]
     rx = pts[:, 2]
+    avg_x = (lx + rx) / 2
+    diff_x = lx - rx  # vergence signal
     hx = pts[:, 4]  # head yaw
     ipd = pts[:, 6]
-    return np.column_stack([np.ones(n), lx, rx, hx, ipd])
+    return np.column_stack([np.ones(n), avg_x, diff_x, hx, ipd])
 
 
 def build_feature_matrix_y(points: list[tuple[float, ...]]) -> np.ndarray:
-    """Features for predicting screen Y: vertical iris ratios + head pitch + IPD."""
+    """Features for predicting screen Y: avg + diff of vertical iris ratios + head pitch + IPD."""
     pts = np.array(points)
     n = len(pts)
     ly = pts[:, 1]
     ry = pts[:, 3]
+    avg_y = (ly + ry) / 2
+    diff_y = ly - ry  # vertical vergence
     hy = pts[:, 5]  # head pitch
     ipd = pts[:, 6]
-    return np.column_stack([np.ones(n), ly, ry, hy, ipd])
+    return np.column_stack([np.ones(n), avg_y, diff_y, hy, ipd])
 
 
 RIDGE_ALPHA = 1.3
