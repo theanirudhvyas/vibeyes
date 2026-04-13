@@ -1,6 +1,12 @@
 # VibEyes
 
-Webcam-based gaze tracking that detects which macOS window (and zellij pane) you're looking at.
+Webcam-based gaze tracking that detects which macOS window (and zellij pane) you're looking at. No extra hardware -- just your laptop's built-in camera.
+
+VibEyes uses MediaPipe's 478-point face mesh to track your iris position and head pose, maps them to screen coordinates via a calibrated regression model, and hit-tests against macOS windows to determine where your visual attention is. For terminal users, it parses zellij's layout to identify individual panes within a split.
+
+The system self-improves: every mouse click is treated as ground truth ("you look where you click") and fed back into the calibration model. An autoresearch subsystem can replay recorded sessions through a modifiable pipeline, letting an AI agent autonomously experiment with different feature extraction, calibration, and smoothing approaches to minimize prediction error.
+
+**Status:** Working prototype (Python). Gaze-to-window detection works, accuracy is being improved via autoresearch. See [PRD.md](PRD.md) for the full product vision including gesture interaction and cross-platform plans.
 
 ## Setup
 
