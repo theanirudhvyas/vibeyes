@@ -1,13 +1,10 @@
 """Implicit calibration from mouse clicks.
 
-Monitors global mouse clicks via NSEvent and uses them as calibration
-points: when you click somewhere, you're presumably looking there.
+Uses a CGEventTap on the main thread to capture mouse clicks globally.
+Requires Accessibility permission (System Settings > Privacy & Security > Accessibility).
 """
 
-import threading
-
 import Quartz
-from Cocoa import NSApplication, NSEvent
 
 from vibeyes import GazeRatio, Point
 from vibeyes.calibration import Calibration
@@ -15,7 +12,11 @@ from vibeyes.metrics import MetricsTracker
 
 
 class ClickCalibrator:
-    """Collects mouse clicks and uses them to refine calibration in real-time."""
+    """Collects mouse clicks via CGEventTap and uses them to refine calibration.
+
+    The event tap and its run loop source live on the main thread. Call pump()
+    each frame from the tracking loop to process pending events.
+    """
 
     def __init__(self, calibration: Calibration, min_points_to_refit: int = 5, max_points: int = 100):
         self._calibration = calibration
@@ -24,56 +25,61 @@ class ClickCalibrator:
         self._click_count = 0
         self._last_gaze: GazeRatio | None = None
         self._last_screen_point: Point | None = None
-        self._lock = threading.Lock()
-        self._monitor = None
         self._metrics = MetricsTracker()
+        self._tap = None
+        self._source = None
 
     def start(self):
-        """Start monitoring mouse clicks via NSEvent global monitor."""
-        # Ensure NSApplication exists (needed for NSEvent monitors)
-        NSApplication.sharedApplication()
+        """Create the CGEventTap on the current (main) thread."""
+        def callback(proxy, event_type, event, refcon):
+            if event_type in (Quartz.kCGEventLeftMouseDown, Quartz.kCGEventRightMouseDown):
+                self._on_click(event)
+            return event
 
-        mask = (1 << 1) | (1 << 3)  # NSEventMaskLeftMouseDown | NSEventMaskRightMouseDown
+        self._tap = Quartz.CGEventTapCreate(
+            Quartz.kCGSessionEventTap,
+            Quartz.kCGHeadInsertEventTap,
+            Quartz.kCGEventTapOptionListenOnly,
+            (Quartz.CGEventMaskBit(Quartz.kCGEventLeftMouseDown) |
+             Quartz.CGEventMaskBit(Quartz.kCGEventRightMouseDown)),
+            callback,
+            None,
+        )
 
-        def handler(event):
-            gaze = self._last_gaze
-            predicted = self._last_screen_point
-            if gaze is None:
-                return
+        if self._tap is None:
+            print("  [click-cal] Cannot create event tap.")
+            print("  Grant Accessibility permission to your terminal app:")
+            print("  System Settings > Privacy & Security > Accessibility")
+            return
 
-            # Get click position in screen coords (top-left origin via Quartz)
-            loc = Quartz.NSEvent.mouseLocation()
-            # Convert from Cocoa bottom-left to top-left origin
-            screen_h = Quartz.CGDisplayPixelsHigh(Quartz.CGMainDisplayID())
-            click_x = loc.x
-            click_y = screen_h - loc.y
+        self._source = Quartz.CFMachPortCreateRunLoopSource(None, self._tap, 0)
+        Quartz.CFRunLoopAddSource(
+            Quartz.CFRunLoopGetMain(),
+            self._source,
+            Quartz.kCFRunLoopCommonModes,
+        )
+        Quartz.CGEventTapEnable(self._tap, True)
 
-            with self._lock:
-                # Record error metric
-                if predicted is not None:
-                    self._metrics.record_click(
-                        predicted.x, predicted.y,
-                        click_x, click_y,
-                        self._calibration.point_count,
-                    )
-
-                self._calibration.add_point(gaze, Point(click_x, click_y))
-                self._click_count += 1
-
-                # Trim old points if over max
-                if self._calibration.point_count > self._max_points:
-                    self._calibration._gaze_points = self._calibration._gaze_points[-self._max_points:]
-                    self._calibration._screen_points = self._calibration._screen_points[-self._max_points:]
-
-        self._monitor = NSEvent.addGlobalMonitorForEventsMatchingMask_handler_(mask, handler)
-        if self._monitor is None:
-            print("  [click-cal] Could not create event monitor.")
+    def pump(self):
+        """Process pending event tap callbacks. Call once per frame from main thread."""
+        if self._tap is None:
+            return
+        # Run the main run loop briefly to process any queued events
+        Quartz.CFRunLoopRunInMode(Quartz.kCFRunLoopDefaultMode, 0.001, True)
 
     def stop(self):
-        """Stop monitoring and print final stats."""
-        if self._monitor is not None:
-            NSEvent.removeMonitor_(self._monitor)
-            self._monitor = None
+        """Disable the event tap and print final stats."""
+        if self._tap is not None:
+            Quartz.CGEventTapEnable(self._tap, False)
+            if self._source is not None:
+                Quartz.CFRunLoopRemoveSource(
+                    Quartz.CFRunLoopGetMain(),
+                    self._source,
+                    Quartz.kCFRunLoopCommonModes,
+                )
+            self._tap = None
+            self._source = None
+
         stats = self._metrics.get_stats()
         if stats["total_clicks"] > 0:
             print(f"\n  Accuracy stats: {stats['total_clicks']} clicks tracked, "
@@ -82,23 +88,48 @@ class ClickCalibrator:
         self._metrics.close()
 
     def update_gaze(self, gaze: GazeRatio, screen_point: Point | None = None):
-        """Update the current gaze estimate (called each frame from tracking loop)."""
+        """Update the current gaze estimate (called each frame)."""
         self._last_gaze = gaze
         self._last_screen_point = screen_point
 
     def check_refit(self) -> bool:
         """Check if we have enough new click-based points to refit."""
-        with self._lock:
-            if self._click_count >= self._min_points:
-                try:
-                    self._calibration.fit()
-                    count = self._click_count
-                    self._click_count = 0
-                    recent_err = self._metrics.get_recent_avg_error(20)
-                    err_str = f", recent avg error={recent_err:.0f}px" if recent_err else ""
-                    print(f"  [click-cal] Refitted with {count} new clicks "
-                          f"({self._calibration.point_count} total){err_str}")
-                    return True
-                except ValueError:
-                    pass
+        if self._click_count >= self._min_points:
+            try:
+                self._calibration.fit()
+                count = self._click_count
+                self._click_count = 0
+                recent_err = self._metrics.get_recent_avg_error(20)
+                err_str = f", recent avg error={recent_err:.0f}px" if recent_err else ""
+                print(f"  [click-cal] Refitted with {count} new clicks "
+                      f"({self._calibration.point_count} total){err_str}")
+                return True
+            except ValueError:
+                pass
         return False
+
+    def _on_click(self, event):
+        """Handle a captured mouse click event."""
+        gaze = self._last_gaze
+        predicted = self._last_screen_point
+        if gaze is None:
+            return
+
+        loc = Quartz.CGEventGetLocation(event)
+        click_x, click_y = loc.x, loc.y
+
+        # Record error metric
+        if predicted is not None:
+            self._metrics.record_click(
+                predicted.x, predicted.y,
+                click_x, click_y,
+                self._calibration.point_count,
+            )
+
+        self._calibration.add_point(gaze, Point(click_x, click_y))
+        self._click_count += 1
+
+        # Trim old points if over max
+        if self._calibration.point_count > self._max_points:
+            self._calibration._gaze_points = self._calibration._gaze_points[-self._max_points:]
+            self._calibration._screen_points = self._calibration._screen_points[-self._max_points:]

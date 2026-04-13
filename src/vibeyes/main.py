@@ -221,20 +221,15 @@ def run_tracking(detector: Detector, camera_device: int = 0, dwell_time: float =
                 print(f"Error: {e}")
                 break
 
-            # Feed current gaze to click calibrator
+            # Feed current gaze to click calibrator and process click events
             if click_calibrator and detector.last_gaze_ratio:
                 click_calibrator.update_gaze(detector.last_gaze_ratio, detector.last_screen_point)
+                click_calibrator.pump()
                 click_calibrator.check_refit()
 
             # Update overlay with raw gaze position (before hysteresis)
             if overlay and detector.last_screen_point:
                 overlay.update(detector.last_screen_point.x, detector.last_screen_point.y)
-            elif click_calibrator:
-                # Pump Cocoa run loop even without overlay so NSEvent monitor fires
-                from Cocoa import NSDate, NSRunLoop
-                NSRunLoop.currentRunLoop().runUntilDate_(
-                    NSDate.dateWithTimeIntervalSinceNow_(0.001)
-                )
 
             fps_counter += 1
             now = time.time()
