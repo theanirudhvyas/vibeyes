@@ -302,15 +302,10 @@ def predict(frame: np.ndarray, state: PipelineState) -> tuple[float, float]:
 
     iris_x, iris_y, head_yaw, head_pitch = features
 
-    iris_x, iris_y, head_yaw, head_pitch = apply_gaze_smoothing(
-        iris_x, iris_y, head_yaw, head_pitch, state)
-
     raw_x, raw_y = calibration_predict(
         (iris_x, iris_y, head_yaw, head_pitch), state.coeffs_x, state.coeffs_y)
 
-    smooth_x, smooth_y = apply_screen_smoothing(raw_x, raw_y, state)
-
-    final_x = max(0.0, min(SCREEN_W, smooth_x))
-    final_y = max(0.0, min(SCREEN_H, smooth_y))
+    final_x = max(0.0, min(SCREEN_W, raw_x))
+    final_y = max(0.0, min(SCREEN_H, raw_y))
 
     return final_x, final_y
