@@ -101,3 +101,63 @@ autoresearch/
 tests/                 52 tests (pytest)
 models/                face_landmarker.task (gitignored, downloaded by make setup)
 ```
+
+### Roadmap
+
+#### Phase 1: Gaze-Aware Window Detection (MVP) -- in progress
+
+| Feature | Status |
+|---------|--------|
+| Webcam capture + camera selection with preview | Done |
+| MediaPipe face/iris landmark detection | Done |
+| 3D head pose estimation (solvePnP) | Done |
+| Gaze estimation (iris ratio + head pose) | Done |
+| Blink detection (freeze gaze during blinks) | Done |
+| 16-point randomized calibration flow | Done |
+| Implicit click-based recalibration | Done |
+| Polynomial regression (gaze -> screen coords) | Done |
+| Median filter + EMA smoothing pipeline | Done |
+| Window hit-testing (CGWindowListCopyWindowInfo) | Done |
+| Zellij pane detection within terminals | Done |
+| Transparent overlay gaze dot | Done |
+| Dwell-time hysteresis (stable window switching) | Done |
+| SQLite accuracy metrics tracking | Done |
+| Frame recording for offline replay | Done |
+| Autoresearch autonomous accuracy optimizer | Done |
+| macOS permission handling (Camera, Accessibility) | Done |
+| Improve gaze accuracy (currently 750-2200px error) | Pending |
+| Menu bar app with camera status indicator | Pending |
+| Auto-raise gazed window after sustained attention | Pending |
+| Attention analytics (time per app) | Pending |
+| Text cursor tracking as calibration signal | Pending |
+| >80% window detection accuracy target | Pending |
+
+#### Phase 2: Gesture Interaction
+
+| Feature | Status |
+|---------|--------|
+| Facial gesture detection (blink, nod, shake, wink) | Pending |
+| Hand gesture detection (MediaPipe Hand Landmarker) | Pending |
+| Customizable gesture-to-action mapping | Pending |
+| Per-application gesture profiles | Pending |
+| Gesture calibration (personal thresholds) | Pending |
+| Compound gestures for destructive actions | Pending |
+
+#### Phase 3: Intelligence & Integrations
+
+| Feature | Status |
+|---------|--------|
+| Attention analytics dashboard (daily/weekly reports) | Pending |
+| Focus mode (detect scattered gaze, suggest focus) | Pending |
+| API/SDK for other apps to query gaze position | Pending |
+| Browser extension (gaze within browser tabs) | Pending |
+| Multi-monitor support | Pending |
+| Shortcuts/Raycast integration | Pending |
+
+#### Phase 4: Cross-Platform
+
+| Feature | Status |
+|---------|--------|
+| Port to Tauri v2 + Rust (production app) | Pending |
+| Linux desktop app (X11, then Wayland) | Pending |
+| Browser-based version (onnxruntime-web) | Pending |
