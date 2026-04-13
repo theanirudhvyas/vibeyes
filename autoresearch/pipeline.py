@@ -183,11 +183,19 @@ def build_feature_matrix(points: list[tuple[float, ...]]) -> np.ndarray:
     ])
 
 
+RIDGE_ALPHA = 1.0
+
 def fit_calibration(gaze_points, screen_points):
     A = build_feature_matrix(gaze_points)
     screen = np.array(screen_points)
-    coeffs_x, _, _, _ = np.linalg.lstsq(A, screen[:, 0], rcond=None)
-    coeffs_y, _, _, _ = np.linalg.lstsq(A, screen[:, 1], rcond=None)
+    # Ridge regression: (A^T A + alpha*I)^-1 A^T y
+    ATA = A.T @ A
+    reg = RIDGE_ALPHA * np.eye(ATA.shape[0])
+    ATA_reg = ATA + reg
+    ATy_x = A.T @ screen[:, 0]
+    ATy_y = A.T @ screen[:, 1]
+    coeffs_x = np.linalg.solve(ATA_reg, ATy_x)
+    coeffs_y = np.linalg.solve(ATA_reg, ATy_y)
     return coeffs_x, coeffs_y
 
 
