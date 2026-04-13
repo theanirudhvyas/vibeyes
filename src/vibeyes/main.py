@@ -13,6 +13,7 @@ from vibeyes.calibration import Calibration
 from vibeyes.camera import Camera, list_cameras, select_camera_interactive
 from vibeyes.click_calibrator import ClickCalibrator
 from vibeyes.detector import Detector
+from vibeyes.frame_recorder import FrameRecorder
 from vibeyes.face_tracker import FaceTracker
 from vibeyes.gaze_estimator import GazeEstimator
 from vibeyes.pane_tracker import get_zellij_layout, parse_active_tab_panes, hit_test_pane
@@ -172,7 +173,8 @@ def run_calibration(face_tracker: FaceTracker, gaze_estimator: GazeEstimator, ca
 
 
 def run_tracking(detector: Detector, camera_device: int = 0, dwell_time: float = 0.5,
-                 show_overlay: bool = False, debug: bool = False, click_cal: bool = True):
+                 show_overlay: bool = False, debug: bool = False, click_cal: bool = True,
+                 record: bool = True):
     """Run continuous gaze tracking, printing detected window to terminal."""
     camera = Camera(device=camera_device)
     confirmed_label = None
@@ -182,11 +184,17 @@ def run_tracking(detector: Detector, camera_device: int = 0, dwell_time: float =
     fps_counter = 0
     fps_start = time.time()
 
+    # Frame recorder for autoresearch replay
+    frame_recorder = None
+    if record:
+        frame_recorder = FrameRecorder()
+        print(f"Recording frames to: {frame_recorder.session_dir}")
+
     # Click-based implicit calibration
     click_calibrator = None
     if click_cal:
         try:
-            click_calibrator = ClickCalibrator(detector.calibration)
+            click_calibrator = ClickCalibrator(detector.calibration, frame_recorder=frame_recorder)
             click_calibrator.start()
             print("Click calibration enabled (clicks refine accuracy over time)")
         except Exception as e:
@@ -221,9 +229,11 @@ def run_tracking(detector: Detector, camera_device: int = 0, dwell_time: float =
                 print(f"Error: {e}")
                 break
 
-            # Feed current gaze to click calibrator and process click events
-            if click_calibrator and detector.last_gaze_ratio:
-                click_calibrator.update_gaze(detector.last_gaze_ratio, detector.last_screen_point)
+            # Buffer frame for recording + feed gaze to click calibrator
+            if click_calibrator:
+                click_calibrator.update_frame(frame)
+                if detector.last_gaze_ratio:
+                    click_calibrator.update_gaze(detector.last_gaze_ratio, detector.last_screen_point)
                 click_calibrator.pump()
                 click_calibrator.check_refit()
 
@@ -307,10 +317,11 @@ def run_tracking(detector: Detector, camera_device: int = 0, dwell_time: float =
     finally:
         if click_calibrator:
             click_calibrator.stop()
-            # Save updated calibration with click data
             if detector.calibration.is_calibrated:
                 detector.calibration.save(CALIBRATION_PATH)
                 print(f"  Calibration saved ({detector.calibration.point_count} points)")
+        if frame_recorder and frame_recorder.click_count > 0:
+            print(f"  Recorded {frame_recorder.click_count} frames to {frame_recorder.session_dir}")
         if overlay:
             overlay.stop()
         camera.release()
@@ -325,6 +336,7 @@ def main():
     parser.add_argument("--dwell", type=float, default=0.5, help="Seconds gaze must stay on new target before switching (default 0.5)")
     parser.add_argument("--overlay", action="store_true", help="Show a red dot overlay where gaze is estimated")
     parser.add_argument("--debug", action="store_true", help="Print raw gaze/screen values every second")
+    parser.add_argument("--no-record", action="store_true", help="Disable frame recording for autoresearch replay")
     parser.add_argument("--list-cameras", action="store_true", help="List available cameras and exit")
     args = parser.parse_args()
 
@@ -383,7 +395,8 @@ def main():
         get_windows=lambda: get_visible_windows(exclude_app="Python"),
     )
 
-    run_tracking(detector, camera_device=camera_device, dwell_time=args.dwell, show_overlay=args.overlay, debug=args.debug)
+    run_tracking(detector, camera_device=camera_device, dwell_time=args.dwell,
+                 show_overlay=args.overlay, debug=args.debug, record=not args.no_record)
     face_tracker.close()
 
 

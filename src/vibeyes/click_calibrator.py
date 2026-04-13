@@ -9,8 +9,11 @@ import time
 
 import Quartz
 
+import numpy as np
+
 from vibeyes import GazeRatio, Point
 from vibeyes.calibration import Calibration
+from vibeyes.frame_recorder import FrameRecorder
 from vibeyes.metrics import MetricsTracker
 
 
@@ -47,14 +50,17 @@ class ClickCalibrator:
     each frame from the tracking loop to process pending events.
     """
 
-    def __init__(self, calibration: Calibration, min_points_to_refit: int = 5, max_points: int = 100):
+    def __init__(self, calibration: Calibration, min_points_to_refit: int = 5, max_points: int = 100,
+                 frame_recorder: FrameRecorder | None = None):
         self._calibration = calibration
         self._min_points = min_points_to_refit
         self._max_points = max_points
         self._click_count = 0
         self._last_gaze: GazeRatio | None = None
         self._last_screen_point: Point | None = None
+        self._last_frame: np.ndarray | None = None
         self._metrics = MetricsTracker()
+        self._frame_recorder = frame_recorder
         self._tap = None
         self._source = None
 
@@ -125,6 +131,11 @@ class ClickCalibrator:
         self._last_gaze = gaze
         self._last_screen_point = screen_point
 
+    def update_frame(self, frame: np.ndarray):
+        """Buffer the latest camera frame (for recording on click)."""
+        if self._frame_recorder:
+            self._frame_recorder.update_frame(frame)
+
     def check_refit(self) -> bool:
         """Check if we have enough new click-based points to refit."""
         if self._click_count >= self._min_points:
@@ -158,6 +169,10 @@ class ClickCalibrator:
                 click_x, click_y,
                 self._calibration.point_count,
             )
+
+        # Save frame + click for offline replay
+        if self._frame_recorder:
+            self._frame_recorder.save_click(click_x, click_y)
 
         self._calibration.add_point(gaze, Point(click_x, click_y))
         self._click_count += 1
