@@ -168,9 +168,8 @@ def extract_gaze_features(frame: np.ndarray, landmarker: FaceLandmarker) -> tupl
 
     left_ear = ear(LEFT_EYE_TOP, LEFT_EYE_BOTTOM, LEFT_EYE_INNER_CORNER, LEFT_EYE_OUTER_CORNER)
     right_ear = ear(RIGHT_EYE_TOP, RIGHT_EYE_BOTTOM, RIGHT_EYE_INNER_CORNER, RIGHT_EYE_OUTER_CORNER)
-    avg_ear = (left_ear + right_ear) / 2
 
-    return lx, ly, rx, ry, head_yaw, head_pitch, ipd, avg_ear
+    return lx, ly, rx, ry, head_yaw, head_pitch, ipd, left_ear, right_ear
 
 
 # ============================================================
@@ -178,7 +177,7 @@ def extract_gaze_features(frame: np.ndarray, landmarker: FaceLandmarker) -> tupl
 # ============================================================
 
 def build_feature_matrix_x(points: list[tuple[float, ...]]) -> np.ndarray:
-    """Features for predicting screen X: avg + diff + head yaw + IPD + EAR."""
+    """Features for predicting screen X: avg + diff + head yaw + IPD + left/right EAR."""
     pts = np.array(points)
     n = len(pts)
     lx = pts[:, 0]
@@ -187,12 +186,13 @@ def build_feature_matrix_x(points: list[tuple[float, ...]]) -> np.ndarray:
     diff_x = lx - rx  # vergence signal
     hx = pts[:, 4]  # head yaw
     ipd = pts[:, 6]
-    ear = pts[:, 7]
-    return np.column_stack([np.ones(n), avg_x, diff_x, hx, ipd, ear])
+    l_ear = pts[:, 7]
+    r_ear = pts[:, 8]
+    return np.column_stack([np.ones(n), avg_x, diff_x, hx, ipd, l_ear, r_ear])
 
 
 def build_feature_matrix_y(points: list[tuple[float, ...]]) -> np.ndarray:
-    """Features for predicting screen Y: avg + diff + head pitch + IPD + EAR."""
+    """Features for predicting screen Y: avg + diff + head pitch + IPD + left/right EAR."""
     pts = np.array(points)
     n = len(pts)
     ly = pts[:, 1]
@@ -201,8 +201,9 @@ def build_feature_matrix_y(points: list[tuple[float, ...]]) -> np.ndarray:
     diff_y = ly - ry  # vertical vergence
     hy = pts[:, 5]  # head pitch
     ipd = pts[:, 6]
-    ear = pts[:, 7]
-    return np.column_stack([np.ones(n), avg_y, diff_y, hy, ipd, ear])
+    l_ear = pts[:, 7]
+    r_ear = pts[:, 8]
+    return np.column_stack([np.ones(n), avg_y, diff_y, hy, ipd, l_ear, r_ear])
 
 
 RIDGE_ALPHA = 1.3
