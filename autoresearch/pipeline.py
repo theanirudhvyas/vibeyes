@@ -166,8 +166,6 @@ def build_feature_matrix(points: list[tuple[float, ...]]) -> np.ndarray:
         np.ones(n),
         ix, iy,
         hx, hy,
-        ix * hx,
-        iy * hy,
     ])
 
 
