@@ -12,11 +12,12 @@ The system self-improves: every mouse click is treated as ground truth ("you loo
 
 ```bash
 make setup          # Create venv, install deps, download model
-make calibrate      # 16-point calibration (look at dots, press SPACE)
-make run-overlay    # Track with gaze dot overlay
+make run-overlay    # First run auto-calibrates, then tracks with gaze dot
 ```
 
-Multiple cameras? Use `make calibrate CAMERA=1` (shows preview to pick the right one).
+Calibration runs automatically on first launch (16 randomized dots -- look at each, press SPACE). After that, every click you make silently improves accuracy. To recalibrate manually: `make calibrate`.
+
+Multiple cameras? Use `make run-overlay CAMERA=1` (shows preview to pick the right one).
 
 ## Developer Setup
 
@@ -50,10 +51,11 @@ Webcam (640x480) -> MediaPipe Face Landmarker (478 landmarks + iris)
 
 ### Calibration
 
-- **Initial**: 16 randomized dots on screen, look + press SPACE for each
-- **Implicit**: every mouse click silently refines the model (you look where you click)
-- **Persistent**: saved across sessions to `calibration.json`
+- **One-time**: 16 randomized dots on first launch, look + press SPACE for each
+- **Self-improving**: every mouse click silently refines the model (you look where you click)
+- **Persistent**: calibration + click refinements saved across sessions to `calibration.json`
 - **Blink-safe**: gaze freezes during blinks (Eye Aspect Ratio detection)
+- **Manual recalibrate**: `make calibrate` if you want to start fresh
 
 ### Permissions
 
@@ -113,8 +115,9 @@ models/                face_landmarker.task (gitignored, downloaded by make setu
 | 3D head pose estimation (solvePnP) | Done |
 | Gaze estimation (iris ratio + head pose) | Done |
 | Blink detection (freeze gaze during blinks) | Done |
+| One-time auto-calibration on first launch | Done |
 | 16-point randomized calibration flow | Done |
-| Implicit click-based recalibration | Done |
+| Implicit click-based recalibration (every click refines model) | Done |
 | Polynomial regression (gaze -> screen coords) | Done |
 | Median filter + EMA smoothing pipeline | Done |
 | Window hit-testing (CGWindowListCopyWindowInfo) | Done |
