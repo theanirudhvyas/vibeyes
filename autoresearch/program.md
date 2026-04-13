@@ -10,8 +10,10 @@ Autonomous experimentation to improve VibEyes gaze tracking accuracy.
 4. Verify recordings exist: check `~/.cache/vibeyes/recordings/` has at least one
    session directory with 30+ clicks.
 5. Initialize `results.tsv` with the header row.
-6. Run baseline: `python prepare.py > run.log 2>&1`
-7. Record baseline avg_error_px in results.tsv.
+6. Run baseline 3 times: `python prepare.py > run.log 2>&1` to measure variance.
+7. Record baseline median_error_px in results.tsv. Note the variance between runs --
+   only keep changes that improve by MORE than the baseline noise.
+8. Read `EXPERIMENTS.md` for the prioritized backlog of ideas to try.
 
 ## Experimentation
 

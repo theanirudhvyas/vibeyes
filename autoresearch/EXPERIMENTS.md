@@ -75,6 +75,19 @@ Running list of ideas for the autonomous agent to try. Ordered by expected impac
 
 ---
 
+## Meta: Autoresearch Loop Design Ideas
+
+From community research (Karpathy loop discussions, autoexp, autoimprove):
+
+- [ ] **Establish baseline variance** -- Run the unmodified pipeline 3-5 times on the same data to measure metric noise floor. Only keep changes that beat baseline by more than the noise. Status: untried
+- [ ] **Bilevel optimization** -- After the agent finds a local optimum, have it refactor the pipeline architecture (not just tune parameters) to unlock new improvement directions. Status: untried
+- [ ] **Feature importance analysis** -- After each refit, log which features have the largest coefficients. Drop features with near-zero coefficients. Status: untried
+- [ ] **Ablation experiments** -- Systematically remove one feature at a time to measure its actual contribution. Some features may hurt. Status: untried
+- [ ] **Ensemble of calibrations** -- Keep the top 3 best-performing pipeline variants, predict with all 3, average the outputs. Status: untried
+- [ ] **Per-region optimization** -- The eval outputs per-region errors (TL/TC/TR etc). Focus experiments on the worst-performing region. Status: untried
+
+---
+
 ## Ideas from External Research
 
 - **3DPE-Gaze (NeurIPS 2025)**: Uses 3D facial landmarks as strong geometric priors. ~1-2 degree angular error.
@@ -82,3 +95,5 @@ Running list of ideas for the autonomous agent to try. Ordered by expected impac
 - **Gaze-LLE (CVPR 2025)**: Frozen DINOv2/ViT scene encoder + lightweight decoder. SOTA gaze target estimation.
 - **GeoGaze (2026)**: MediaPipe 478-point mesh + normalized iris ratios, 66fps CPU, no training.
 - **pperle/gaze-tracking**: Lightweight CNN, ~2.4 degree with 128 calibration samples.
+- **autoexp** (generalized autoresearch): Any measurable metric works. Three conditions: measurable fitness signal, controlled repeatable experiment, automatic keep/revert.
+- **Prompt autoresearch** (@aakashgupta): Same loop applied to prompt reliability optimization (80% -> 95%). One file changes, one metric scores it.
