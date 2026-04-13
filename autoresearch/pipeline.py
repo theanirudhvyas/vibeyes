@@ -172,7 +172,7 @@ def build_feature_matrix(points: list[tuple[float, ...]]) -> np.ndarray:
     ])
 
 
-RIDGE_ALPHA = 0.3
+RIDGE_ALPHA = 0.9
 
 def fit_calibration(gaze_points, screen_points):
     A = build_feature_matrix(gaze_points)
