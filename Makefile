@@ -1,7 +1,39 @@
-.PHONY: setup calibrate run run-overlay run-debug record list-cameras test clean-calibration clean-recordings
+.PHONY: help setup calibrate run run-overlay run-debug record list-cameras test clean-calibration clean-recordings
+.DEFAULT_GOAL := help
 
 VENV = .venv/bin
 PYTHON = $(VENV)/python
+
+# ─── Help ────────────────────────────────────────────────────
+
+help:
+	@echo "VibEyes - Webcam gaze tracking for window focus detection"
+	@echo ""
+	@echo "Setup:"
+	@echo "  make setup               Install venv, deps, and download model"
+	@echo ""
+	@echo "Usage:"
+	@echo "  make calibrate           Run 16-point calibration with overlay"
+	@echo "  make run                 Track gaze, print detected window"
+	@echo "  make run-overlay         Track with translucent gaze dot on screen"
+	@echo "  make run-debug           Track with overlay + debug output"
+	@echo "  make list-cameras        List available cameras"
+	@echo ""
+	@echo "  Specify camera:  make calibrate CAMERA=1"
+	@echo ""
+	@echo "Testing & Metrics:"
+	@echo "  make test                Run all 52 tests"
+	@echo "  make test-quick          Run tests (compact output)"
+	@echo "  make metrics             Show click accuracy stats"
+	@echo ""
+	@echo "Autoresearch:"
+	@echo "  make autoresearch-recordings  List recorded sessions + click counts"
+	@echo "  make autoresearch-baseline    Run baseline evaluation on recordings"
+	@echo ""
+	@echo "Cleanup:"
+	@echo "  make clean-calibration   Delete calibration (forces recalibrate)"
+	@echo "  make clean-recordings    Delete all recorded sessions"
+	@echo "  make clean-metrics       Delete accuracy metrics database"
 
 # ─── Setup ───────────────────────────────────────────────────
 
