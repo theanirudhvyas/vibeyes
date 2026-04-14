@@ -56,6 +56,29 @@ Running list of ideas for the autonomous agent to try. Ordered by expected impac
 
 ---
 
+## Tier 2.5: Posture Invariance (multi-pose usage)
+
+User uses laptop in different poses: desk, sofa, lying down. Each changes camera angle, face distance, and head orientation relative to screen. Current calibration breaks across poses.
+
+### Pose-Robust Features
+- [ ] **Normalize iris ratios by face bounding box** -- Divide iris position by the face bounding box (from landmarks) so features are scale/position invariant. A desk pose and a sofa pose produce different absolute iris positions but similar normalized positions. Status: untried
+- [ ] **Face tilt angle as feature** -- Compute the angle of the line between eyes relative to horizontal. On a sofa your head tilts; on a desk it's level. Letting the model see this tilt should help it compensate. Status: untried
+- [ ] **Face-relative iris position** -- Express iris position relative to face center (nose tip or eye midpoint) instead of frame coordinates. Removes dependence on where the face appears in the frame, which changes drastically between desk and lying down. Status: untried
+- [ ] **Camera-to-face distance normalization** -- Use IPD or face width to estimate distance, then scale iris ratios accordingly. At arm's length (desk) iris movement per degree of gaze is smaller than at close range (lying down). Status: untried
+- [ ] **Pitch-compensated vertical iris ratio** -- When lying down, head pitch changes by ~45-90 degrees. The vertical iris ratio becomes unreliable. Compensate by rotating the vertical measurement axis by head pitch angle. Status: untried
+
+### Multi-Pose Calibration
+- [ ] **Per-pose calibration clusters** -- Detect the current pose (via head pitch + face size) and maintain separate calibration models per pose cluster. Switch models based on detected pose. Status: untried
+- [ ] **Pose-aware weighted calibration** -- Weight calibration points by similarity to current pose. Recent clicks in a similar pose get higher weight than clicks from a different pose. Similarity = closeness in (head_pitch, head_yaw, face_size) space. Status: untried
+- [ ] **Continuous recalibration with pose decay** -- Give calibration points an exponential decay weight based on how different the current pose is from when the point was collected. Points from the same pose stay relevant; points from different poses fade. Status: untried
+- [ ] **Auto-detect posture change** -- Monitor head pitch and face size over a sliding window. If they change beyond a threshold (e.g. pitch shifts 20+ degrees), trigger a mini-recalibration prompt or increase weight on new clicks. Status: untried
+
+### Data Collection for Pose Testing
+- [ ] **Multi-pose recording sessions** -- Record calibration data in each pose: desk upright, desk leaning back, sofa, lying on side, lying on back. Test cross-pose generalization. Status: untried
+- [ ] **Leave-one-pose-out evaluation** -- Train on clicks from all poses except one, test on the held-out pose. Measures how well the model generalizes across postures. Status: untried
+
+---
+
 ## Tier 3: Lower Impact / Bigger Effort
 
 ### Preprocessing
