@@ -180,7 +180,13 @@ def extract_gaze_features(frame: np.ndarray, landmarker: FaceLandmarker) -> tupl
     nose_off_x = nose.x - eye_mid_x
     nose_off_y = nose.y - eye_mid_y
 
-    return lx, ly, rx, ry, head_yaw, head_pitch, ipd, left_ear, right_ear, avg_iris_abs_x, avg_iris_abs_y, nose_off_x, nose_off_y
+    # Iris-to-nose vectors (encodes gaze relative to face structure)
+    iris_nose_lx = left_iris.x - nose.x
+    iris_nose_ly = left_iris.y - nose.y
+    iris_nose_rx = right_iris.x - nose.x
+    iris_nose_ry = right_iris.y - nose.y
+
+    return lx, ly, rx, ry, head_yaw, head_pitch, ipd, left_ear, right_ear, avg_iris_abs_x, avg_iris_abs_y, nose_off_x, nose_off_y, iris_nose_lx, iris_nose_ly, iris_nose_rx, iris_nose_ry
 
 
 # ============================================================
@@ -201,7 +207,9 @@ def build_feature_matrix_x(points: list[tuple[float, ...]]) -> np.ndarray:
     r_ear = pts[:, 8]
     abs_x = pts[:, 9]  # absolute iris X in frame
     nose_ox = pts[:, 11]
-    return np.column_stack([np.ones(n), avg_x, diff_x, hx, ipd, l_ear, r_ear, abs_x, nose_ox])
+    in_lx = pts[:, 13]  # iris-to-nose left x
+    in_rx = pts[:, 15]  # iris-to-nose right x
+    return np.column_stack([np.ones(n), avg_x, diff_x, hx, ipd, l_ear, r_ear, abs_x, nose_ox, in_lx, in_rx])
 
 
 def build_feature_matrix_y(points: list[tuple[float, ...]]) -> np.ndarray:
@@ -218,7 +226,9 @@ def build_feature_matrix_y(points: list[tuple[float, ...]]) -> np.ndarray:
     r_ear = pts[:, 8]
     abs_y = pts[:, 10]  # absolute iris Y in frame
     nose_oy = pts[:, 12]
-    return np.column_stack([np.ones(n), avg_y, diff_y, hy, ipd, l_ear, r_ear, abs_y, nose_oy])
+    in_ly = pts[:, 14]  # iris-to-nose left y
+    in_ry = pts[:, 16]  # iris-to-nose right y
+    return np.column_stack([np.ones(n), avg_y, diff_y, hy, ipd, l_ear, r_ear, abs_y, nose_oy, in_ly, in_ry])
 
 
 RIDGE_ALPHA = 0.8
