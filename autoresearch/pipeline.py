@@ -237,7 +237,7 @@ def build_feature_matrix_y(points: list[tuple[float, ...]]) -> np.ndarray:
     in_ry = pts[:, 16]  # iris-to-nose right y
     face_tilt = pts[:, 17]
     avg_ear = (l_ear + r_ear) / 2
-    return np.column_stack([np.ones(n), avg_y, diff_y, hy, ipd, avg_ear, abs_y, nose_oy, in_ly, in_ry, face_tilt])
+    return np.column_stack([np.ones(n), avg_y, hy, ipd, avg_ear, abs_y, nose_oy, in_ly, in_ry, face_tilt])
 
 
 RIDGE_ALPHA_X = 0.8
