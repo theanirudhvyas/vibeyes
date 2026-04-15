@@ -258,7 +258,7 @@ def build_feature_matrix_x(points: list[tuple[float, ...]]) -> np.ndarray:
     nose_ox = pts[:, 11]
     in_lx = pts[:, 13]  # iris-to-nose left x
     in_rx = pts[:, 15]  # iris-to-nose right x
-    return np.column_stack([np.ones(n), avg_x, diff_x, hx, ipd, l_ear, r_ear, abs_x, nose_ox, in_lx, in_rx])
+    return np.column_stack([np.ones(n), avg_x, diff_x, hx, ipd, l_ear, r_ear, abs_x, nose_ox, in_lx, in_rx, avg_x**2, abs_x**2])
 
 
 def build_feature_matrix_y(points: list[tuple[float, ...]]) -> np.ndarray:
