@@ -215,7 +215,8 @@ def build_feature_matrix_x(points: list[tuple[float, ...]]) -> np.ndarray:
     in_lx = pts[:, 13]  # iris-to-nose left x
     in_rx = pts[:, 15]  # iris-to-nose right x
     face_tilt = pts[:, 17]
-    return np.column_stack([np.ones(n), avg_x, diff_x, hx, ipd, l_ear, r_ear, abs_x, nose_ox, in_lx, in_rx, face_tilt])
+    avg_ear = (l_ear + r_ear) / 2
+    return np.column_stack([np.ones(n), avg_x, diff_x, hx, ipd, avg_ear, abs_x, nose_ox, in_lx, in_rx, face_tilt])
 
 
 def build_feature_matrix_y(points: list[tuple[float, ...]]) -> np.ndarray:
@@ -235,7 +236,8 @@ def build_feature_matrix_y(points: list[tuple[float, ...]]) -> np.ndarray:
     in_ly = pts[:, 14]  # iris-to-nose left y
     in_ry = pts[:, 16]  # iris-to-nose right y
     face_tilt = pts[:, 17]
-    return np.column_stack([np.ones(n), avg_y, diff_y, hy, ipd, l_ear, r_ear, abs_y, nose_oy, in_ly, in_ry, face_tilt])
+    avg_ear = (l_ear + r_ear) / 2
+    return np.column_stack([np.ones(n), avg_y, diff_y, hy, ipd, avg_ear, abs_y, nose_oy, in_ly, in_ry, face_tilt])
 
 
 RIDGE_ALPHA_X = 0.8
