@@ -267,7 +267,7 @@ def fit_calibration(gaze_points, screen_points):
     cur_gaze = list(gaze_points)
     cur_screen = list(screen_points)
 
-    for _ in range(2):  # iterative outlier rejection
+    for _ in range(3):  # iterative outlier rejection
         coeffs_x, coeffs_y, norm_x, norm_y = _fit_normalized(cur_gaze, cur_screen)
 
         # Compute residuals
