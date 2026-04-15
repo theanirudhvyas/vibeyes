@@ -238,7 +238,8 @@ def build_feature_matrix_y(points: list[tuple[float, ...]]) -> np.ndarray:
     return np.column_stack([np.ones(n), avg_y, diff_y, hy, ipd, l_ear, r_ear, abs_y, nose_oy, in_ly, in_ry, face_tilt])
 
 
-RIDGE_ALPHA = 0.8
+RIDGE_ALPHA_X = 0.8
+RIDGE_ALPHA_Y = 0.5
 
 def _ridge_fit(A, y, alpha):
     ATA = A.T @ A
@@ -265,8 +266,8 @@ def _fit_normalized(gaze_points, screen_points):
     Ay_norm[:, 1:] = (Ay[:, 1:] - mean_y) / std_y
 
     screen = np.array(screen_points)
-    coeffs_x = _ridge_fit(Ax_norm, screen[:, 0], RIDGE_ALPHA)
-    coeffs_y = _ridge_fit(Ay_norm, screen[:, 1], RIDGE_ALPHA)
+    coeffs_x = _ridge_fit(Ax_norm, screen[:, 0], RIDGE_ALPHA_X)
+    coeffs_y = _ridge_fit(Ay_norm, screen[:, 1], RIDGE_ALPHA_Y)
     return coeffs_x, coeffs_y, (mean_x, std_x), (mean_y, std_y)
 
 
