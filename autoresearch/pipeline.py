@@ -204,19 +204,19 @@ def build_feature_matrix_x(points: list[tuple[float, ...]]) -> np.ndarray:
     n = len(pts)
     lx = pts[:, 0]
     rx = pts[:, 2]
-    avg_x = (lx + rx) / 2
-    diff_x = lx - rx
     hx = pts[:, 4]
     ipd = pts[:, 6]
     l_ear = pts[:, 7]
     r_ear = pts[:, 8]
-    abs_x = pts[:, 9]  # absolute iris X in frame
     nose_ox = pts[:, 11]
     in_lx = pts[:, 13]  # iris-to-nose left x
     in_rx = pts[:, 15]  # iris-to-nose right x
     face_tilt = pts[:, 17]
     avg_ear = (l_ear + r_ear) / 2
-    return np.column_stack([np.ones(n), avg_x, hx, ipd, avg_ear, nose_ox, in_lx, in_rx, face_tilt])
+    # EAR-weighted iris ratio: more open eye gets more weight
+    total_ear = l_ear + r_ear + 1e-6
+    weighted_x = (lx * l_ear + rx * r_ear) / total_ear
+    return np.column_stack([np.ones(n), weighted_x, hx, ipd, avg_ear, nose_ox, in_lx, in_rx, face_tilt])
 
 
 def build_feature_matrix_y(points: list[tuple[float, ...]]) -> np.ndarray:
