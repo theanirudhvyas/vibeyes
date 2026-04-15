@@ -13,7 +13,7 @@ Autonomous experimentation to improve VibEyes gaze tracking accuracy.
 6. Run baseline 3 times: `python prepare.py > run.log 2>&1` to measure variance.
 7. Record baseline median_error_px in results.tsv. Note the variance between runs --
    only keep changes that improve by MORE than the baseline noise.
-8. Read `EXPERIMENTS.md` for the prioritized backlog of ideas to try.
+8. Read `EXPERIMENTS.md` for the prioritized backlog of ideas already tried.
 
 ## Experimentation
 
@@ -80,87 +80,152 @@ commit	median_error_px	avg_error_px	status	description
 LOOP FOREVER:
 
 1. Look at git state and past results in results.tsv
-2. Modify `pipeline.py` with an experimental idea
-3. git commit
-4. Run: `python prepare.py > run.log 2>&1`
-5. Read results: `grep "^avg_error_px:\|^median_error_px:" run.log`
-6. If grep empty → crash. Check `tail -n 50 run.log` for the error.
-7. Record results in results.tsv (do NOT commit results.tsv)
-8. If median_error_px improved (lower): keep the commit
-9. If median_error_px equal or worse: `git reset --hard` to discard
+2. **Research** (see Research-Driven Strategy below) — search for relevant
+   techniques before coding. Form a hypothesis grounded in published methods.
+3. Modify `pipeline.py` with the experimental idea
+4. git commit
+5. Run: `python prepare.py > run.log 2>&1`
+6. Read results: `grep "^avg_error_px:\|^median_error_px:" run.log`
+7. If grep empty → crash. Check `tail -n 50 run.log` for the error.
+8. Record results in results.tsv (do NOT commit results.tsv)
+9. If median_error_px improved (lower): keep the commit
+10. If median_error_px equal or worse: `git reset --hard` to discard
 
 **NEVER STOP.** The human may be asleep. Each experiment takes ~30-60 seconds,
 so you can run ~60-120 experiments per hour.
 
-## Ideas to try (ordered by expected impact)
+## Research-Driven Strategy
 
-### HIGH PRIORITY — likely to give biggest accuracy gains
+**Do not just try random feature tweaks.** Before each batch of experiments, use
+Perplexity (web search) to find state-of-the-art techniques. The goal is to bring
+published research into this pipeline, not to guess blindly.
 
-Geometric normalization (THE #1 problem per SOTA research):
-- The current iris ratio is computed on raw 2D landmark projections which are
-  confounded by head pose. When the head turns, the 2D projection distorts the
-  iris-to-corner distance even if gaze direction didn't change.
-- Use the rotation matrix from solvePnP to warp/rotate the eye landmarks to a
-  canonical frontal view BEFORE computing iris ratios.
-- This is what GeoGaze (2026) and 3DPE-Gaze (2025) both do.
-- Implementation: apply inverse rotation to the 2D eye landmarks, then compute ratios.
+### When to research
 
-Ridge regression (prevent overfitting):
-- Replace np.linalg.lstsq with Ridge regression (L2 regularization).
-- Current lstsq with 7 features and ~20-100 noisy points overfits badly.
-- Try: `from sklearn.linear_model import Ridge` or implement manually with
-  `(A^T A + alpha*I)^-1 A^T y` using numpy.
-- Try alpha values: 0.1, 1.0, 10.0, 100.0.
+- **At the start of each run** — before your first experiment, do 3-5 searches
+  to understand the current landscape. What are the best webcam-only gaze tracking
+  systems achieving? What techniques do they use?
+- **When you hit a plateau** — if 5+ consecutive experiments fail to improve,
+  stop and research. Search for the specific problem you're stuck on (e.g.,
+  "how to reduce gaze estimation error in the center-screen region").
+- **Before trying a new category of change** — before attempting a new approach
+  (e.g., switching from ridge to SVR, adding a Kalman filter), search for how
+  others have done it in gaze tracking specifically.
 
-Feature normalization:
-- Z-score normalize all features before regression (subtract mean, divide by std).
-- Iris ratios are 0-1, head yaw is -15 to +15 degrees — mixing these scales
-  without normalization biases the regression toward larger-magnitude features.
+### What to search for
 
-3D gaze vector instead of 2D ratios:
-- Estimate 3D eyeball center from the face mesh (midpoint of eye corners + offset).
-- Compute gaze direction vector from eyeball center through iris center.
-- Intersect this ray with the screen plane to get screen coordinates.
-- This is geometrically more correct than a 2D ratio mapped through polynomial regression.
+Use Perplexity MCP (`mcp__perplexity-mcp__perplexity_search_web`) for all
+web searches. Specific topics to research:
 
-### MEDIUM PRIORITY — good incremental improvements
+1. **State of the art in webcam gaze tracking** — What accuracy do the best
+   systems achieve? What are the key techniques? Search for:
+   - "state of the art webcam eye gaze tracking 2025 2026 accuracy"
+   - "best open source gaze estimation single camera no special hardware"
+   - Look for: GeoGaze, L2CS-Net, WebEyeTrack, BlazeGaze, ETH-XGaze, MPIIGaze
 
-Feature extraction:
-- Use more landmark indices (MediaPipe provides 478 total)
-- Weight left/right eye differently based on head yaw (the eye closer to the
-  camera has better iris visibility)
-- Use eye aspect ratio (openness) as an additional feature
-- Add face width/height ratio as a distance proxy
-- Inter-pupillary distance (changes with viewing distance)
-- Nose tip position relative to face center
+2. **Geometric gaze estimation** — The most promising direction for our
+   MediaPipe-based approach. Search for:
+   - "3D eyeball center estimation from face landmarks gaze ray screen intersection"
+   - "iris ratio normalization head pose compensation gaze tracking"
+   - "GeoGaze MediaPipe iris ratio frontalization technique"
+   - The core idea: estimate a 3D gaze ray from eyeball center through iris,
+     intersect with screen plane. This is geometrically correct vs our current
+     2D ratio → regression approach.
 
-Calibration:
-- Quadratic polynomial (add iris_x^2, iris_y^2, etc.)
-- Separate models for horizontal (screen_x) and vertical (screen_y)
-- Weighted least squares (weight recent clicks more than old ones)
-- Try SVR (Support Vector Regression) instead of linear regression
+3. **Calibration and regression methods for gaze** — Search for:
+   - "personal calibration gaze estimation few-shot ridge SVR random forest"
+   - "gaze calibration polynomial regression vs neural network vs SVR accuracy"
+   - Our calibration has ~80-200 points per session — what model fits best?
 
-Head pose:
-- Add head roll as a feature (currently only yaw + pitch)
-- Use more landmarks for solvePnP (8+ instead of 6 — more stable)
-- Different solvePnP solver flags (EPNP, AP3P, SQPNP)
-- Different 3D face model dimensions
-- Use translation vector (encodes distance from camera)
+4. **Smoothing and temporal filtering** — Search for:
+   - "one euro filter eye tracking implementation parameters"
+   - "Kalman filter gaze estimation prediction correction"
+   - "adaptive smoothing saccade detection gaze tracking"
+   - Note: smoothing is for the LIVE system, not replay. But understanding
+     temporal dynamics helps with understanding noise patterns.
 
-Smoothing:
-- Kalman filter instead of median + EMA
-- One-euro filter (jitter-adaptive low-pass filter)
-- Adaptive smoothing (more when head is still, less when moving)
-- Different median window sizes
+5. **Feature engineering for landmark-based gaze** — Search for:
+   - "MediaPipe face mesh gaze features which landmarks carry gaze signal"
+   - "eye aspect ratio pupil position head pose features gaze estimation"
+   - "iris-to-nose vector face geometry gaze direction"
 
-### LOWER PRIORITY — bigger changes, try after basics work
+6. **Specific problems you observe** — When per-region errors suggest a
+   pattern, search for that specific issue:
+   - "gaze estimation accuracy worse at screen edges vs center"
+   - "head pose confounding iris position gaze tracking fix"
+   - "cross-session gaze calibration generalization"
 
-Preprocessing:
-- Histogram equalization on frames before landmark detection
-- CLAHE (contrast-limited adaptive histogram equalization) on eye region
-- Different frame resolutions
+### How to use research findings
 
-Appearance-based features:
-- Compute histogram of oriented gradients (HOG) on cropped eye region
-- Use mean pixel intensity of iris region as additional feature
-- Edge detection on eye region for pupil localization
+After searching, synthesize what you learned into a concrete experiment:
+
+1. **Identify the technique** — What specific algorithm or approach did the
+   paper/project use?
+2. **Map to our pipeline** — How does this translate to changes in `pipeline.py`?
+   What features to add/remove? What model to use?
+3. **Estimate feasibility** — Can we implement this with numpy/scipy/opencv only?
+   Does it need the full 478 landmarks? Is it too complex for a single experiment?
+4. **Design the experiment** — One variable at a time. If the technique involves
+   3 changes, try them separately.
+5. **Record the source** — In the git commit message and results.tsv description,
+   note what research inspired the experiment (e.g., "per GeoGaze frontalization
+   approach" or "WebEyeTrack 3D gaze ray method").
+
+### Research budget
+
+Spend ~5 minutes researching per ~30 minutes of experimentation. Don't research
+every single experiment — batch related experiments together. Research when:
+- Starting a new direction
+- Stuck after 5+ failures
+- Moving to a fundamentally different approach
+
+## Strategy
+
+Read `EXPERIMENTS.md` for a backlog of ideas already tried, but don't treat it
+as a checklist. Use your own judgment: read the current pipeline code, analyze
+the per-region error breakdown, and form hypotheses about what's limiting accuracy.
+The best experiments come from understanding *why* the current approach fails,
+not from trying ideas in order.
+
+Useful tactics:
+- **Ablation first** — before adding complexity, check if removing things helps.
+  Drop features, simplify the model, see what actually matters.
+- **Analyze errors** — the per-region breakdown tells you where the model is
+  weakest. Focus experiments on the worst regions.
+- **Small changes** — one variable per experiment. If you change three things and
+  the metric improves, you don't know which one helped.
+- **Research before building** — search Perplexity for how others solved the
+  specific problem you're attacking. Don't reinvent solutions that exist.
+
+### Key directions from published research
+
+These are high-level directions grounded in the current SOTA. Research the
+specifics before implementing:
+
+- **3D gaze ray geometry** — Instead of mapping 2D iris ratios through regression,
+  estimate a 3D gaze vector (from eyeball center through iris) and intersect with
+  the screen plane. This is the approach used by WebEyeTrack (2025) and geometric
+  VOG systems. Search for implementation details before attempting.
+
+- **Iris ratio frontalization** — GeoGaze (2026) normalizes iris ratios by
+  removing head-pose distortion before feeding to the model. Uses the solvePnP
+  rotation matrix to warp eye landmarks to a canonical frontal view. Search for
+  "GeoGaze iris ratio normalization" for specifics.
+
+- **Hybrid calibration** — WebEyeTrack uses a 3D geometric model for coarse
+  gaze + a lightweight learned model (few-shot calibrated) for refinement.
+  Search for "hybrid geometric appearance gaze estimation calibration."
+
+- **EdgeGauss / One-Euro smoothing** — Temporal filtering that preserves saccades
+  while removing jitter. One-Euro filter adapts its cutoff frequency based on
+  signal velocity. Search for implementation and parameter tuning for gaze data.
+
+- **Ellipse fitting for iris** — Instead of using MediaPipe's single iris center
+  point, fit an ellipse to the iris boundary landmarks and use ellipse parameters
+  (center, axes, orientation) as features. The ellipse orientation encodes gaze
+  direction independent of head pose.
+
+- **Pupil-cornea offset** — The offset between the pupil center and corneal
+  reflection encodes gaze direction. MediaPipe doesn't give corneal reflections,
+  but the z-coordinate of iris landmarks relative to eye surface landmarks
+  captures a similar signal.
