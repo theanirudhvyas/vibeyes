@@ -240,7 +240,7 @@ def build_feature_matrix_y(points: list[tuple[float, ...]]) -> np.ndarray:
     return np.column_stack([np.ones(n), avg_y, hy, ipd, avg_ear, abs_y, nose_oy, in_ly, in_ry, face_tilt])
 
 
-RIDGE_ALPHA_X = 0.8
+RIDGE_ALPHA_X = 0.7
 RIDGE_ALPHA_Y = 0.5
 
 def _ridge_fit(A, y, alpha):
