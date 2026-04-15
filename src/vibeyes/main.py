@@ -10,7 +10,7 @@ import numpy as np
 
 from vibeyes import GazeRatio, Point
 from vibeyes.calibration import Calibration
-from vibeyes.camera import Camera, list_cameras, select_camera_interactive
+from vibeyes.camera import Camera, list_cameras, select_camera_interactive, auto_select_camera
 from vibeyes.click_calibrator import ClickCalibrator
 from vibeyes.detector import Detector
 from vibeyes.frame_recorder import FrameRecorder
@@ -358,8 +358,14 @@ def main():
             camera_device = cameras[0]["index"]
             print(f"Using camera {camera_device}")
         else:
-            print(f"Found {len(cameras)} cameras. Showing preview of each...")
-            camera_device = select_camera_interactive(cameras)
+            # Try auto-detecting the camera with a face
+            print(f"Found {len(cameras)} cameras. Detecting face...")
+            camera_device = auto_select_camera(cameras)
+            if camera_device is not None:
+                print(f"Auto-selected camera {camera_device} (face detected)")
+            else:
+                print("Multiple cameras with faces (or none). Showing preview...")
+                camera_device = select_camera_interactive(cameras)
 
     model_path = os.path.abspath(args.model)
     if not os.path.exists(model_path):

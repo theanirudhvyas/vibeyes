@@ -86,6 +86,61 @@ def list_cameras() -> list[dict]:
     return cameras
 
 
+def auto_select_camera(cameras: list[dict]) -> int | None:
+    """Try to auto-select a camera by detecting a face.
+
+    Grabs a few frames from each camera and runs MediaPipe face detection.
+    Returns the camera index if exactly one camera has a face, None if
+    zero or multiple cameras have faces (caller should fall back to interactive).
+    """
+    import mediapipe as mp
+    from mediapipe.tasks.python import BaseOptions
+    from mediapipe.tasks.python.vision import FaceLandmarker, FaceLandmarkerOptions
+    import os
+
+    model_path = os.path.join(os.path.dirname(__file__), "..", "..", "models", "face_landmarker.task")
+    if not os.path.exists(model_path):
+        return None
+
+    options = FaceLandmarkerOptions(
+        base_options=BaseOptions(model_asset_path=model_path),
+        output_face_blendshapes=False,
+        output_facial_transformation_matrixes=False,
+        num_faces=1,
+    )
+    landmarker = FaceLandmarker.create_from_options(options)
+
+    cameras_with_face = []
+    for cam in cameras:
+        idx = cam["index"]
+        cap = cv2.VideoCapture(idx)
+        if not cap.isOpened():
+            continue
+
+        face_found = False
+        # Grab a few frames (first ones may be blank)
+        for _ in range(10):
+            ret, frame = cap.read()
+            if not ret:
+                continue
+            rgb = frame[:, :, ::-1]
+            image = mp.Image(image_format=mp.ImageFormat.SRGB, data=np.ascontiguousarray(rgb))
+            result = landmarker.detect(image)
+            if result.face_landmarks:
+                face_found = True
+                break
+        cap.release()
+
+        if face_found:
+            cameras_with_face.append(idx)
+
+    landmarker.close()
+
+    if len(cameras_with_face) == 1:
+        return cameras_with_face[0]
+    return None
+
+
 def select_camera_interactive(cameras: list[dict]) -> int:
     """Cycle through cameras with live preview. User picks visually.
 
