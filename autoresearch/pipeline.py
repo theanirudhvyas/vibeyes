@@ -216,7 +216,8 @@ def build_feature_matrix_x(points: list[tuple[float, ...]]) -> np.ndarray:
     # EAR-weighted iris ratio: more open eye gets more weight
     total_ear = l_ear + r_ear + 1e-6
     weighted_x = (lx * l_ear + rx * r_ear) / total_ear
-    return np.column_stack([np.ones(n), weighted_x, hx, ipd, avg_ear, nose_ox, in_lx, in_rx, face_tilt])
+    abs_y = pts[:, 10]
+    return np.column_stack([np.ones(n), weighted_x, hx, ipd, avg_ear, nose_ox, in_lx, in_rx, face_tilt, abs_y])
 
 
 def build_feature_matrix_y(points: list[tuple[float, ...]]) -> np.ndarray:
