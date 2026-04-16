@@ -73,15 +73,27 @@ class Calibration:
 
     @classmethod
     def load(cls, path: str) -> "Calibration":
-        """Load a calibration from a JSON file."""
+        """Load a calibration from a JSON file.
+
+        If the saved coefficients don't match the current feature matrix size
+        (e.g., pipeline changed), re-fit from the stored gaze/screen points.
+        """
         with open(path) as f:
             data = json.load(f)
         cal = cls()
         cal._gaze_points = [tuple(p) for p in data["gaze_points"]]
         cal._screen_points = [tuple(p) for p in data["screen_points"]]
         if data["coeffs_x"] is not None:
-            cal._coeffs_x = np.array(data["coeffs_x"])
-            cal._coeffs_y = np.array(data["coeffs_y"])
+            coeffs_x = np.array(data["coeffs_x"])
+            expected_size = cls._build_feature_matrix(cal._gaze_points[:1]).shape[1]
+            if coeffs_x.shape[0] == expected_size:
+                cal._coeffs_x = coeffs_x
+                cal._coeffs_y = np.array(data["coeffs_y"])
+            elif len(cal._gaze_points) >= MIN_CALIBRATION_POINTS:
+                print(f"Calibration coefficients stale ({coeffs_x.shape[0]} features "
+                      f"vs {expected_size} expected). Re-fitting from saved points.")
+                cal.fit()
+            # else: not enough points and stale coefficients — leave uncalibrated
         return cal
 
     def clear(self):

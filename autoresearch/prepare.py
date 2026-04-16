@@ -77,13 +77,22 @@ def evaluate(predictions: list[tuple[float, float]],
              actuals: list[tuple[float, float]],
              screen_w: float = 3360.0,
              screen_h: float = 2100.0) -> dict:
-    """Compute accuracy metrics including per-region breakdown."""
+    """Compute accuracy metrics including per-region breakdown and window hit rates."""
     assert len(predictions) == len(actuals), \
         f"Length mismatch: {len(predictions)} predictions vs {len(actuals)} actuals"
+
+    # Physical screen for angular error (14" MacBook Pro at 60cm viewing distance)
+    screen_phys_w_cm = 31.2
+    viewing_dist_cm = 60.0
+    px_per_cm = screen_w / screen_phys_w_cm
 
     errors = []
     region_errors = {name: [] for name in [
         "TL", "TC", "TR", "ML", "MC", "MR", "BL", "BC", "BR"]}
+
+    hits_2col = 0
+    hits_3col = 0
+    hits_quadrant = 0
 
     for (px, py), (ax, ay) in zip(predictions, actuals):
         err = math.sqrt((px - ax) ** 2 + (py - ay) ** 2)
@@ -94,8 +103,24 @@ def evaluate(predictions: list[tuple[float, float]],
         region_name = ["TL", "TC", "TR", "ML", "MC", "MR", "BL", "BC", "BR"][row * 3 + col]
         region_errors[region_name].append(err)
 
+        # Window hit rates for common layouts
+        cpx = max(0.0, min(screen_w - 1, px))
+        cpy = max(0.0, min(screen_h - 1, py))
+        if int(ax / (screen_w / 2)) == int(cpx / (screen_w / 2)):
+            hits_2col += 1
+        if int(ax / (screen_w / 3)) == int(cpx / (screen_w / 3)):
+            hits_3col += 1
+        if (int(ax / (screen_w / 2)) == int(cpx / (screen_w / 2)) and
+                int(ay / (screen_h / 2)) == int(cpy / (screen_h / 2))):
+            hits_quadrant += 1
+
     errors.sort()
     n = len(errors)
+
+    median_err_cm = errors[n // 2] / px_per_cm
+    avg_err_cm = (sum(errors) / n) / px_per_cm
+    median_angle_deg = math.degrees(math.atan(median_err_cm / viewing_dist_cm))
+    avg_angle_deg = math.degrees(math.atan(avg_err_cm / viewing_dist_cm))
 
     region_medians = {}
     for name, errs in region_errors.items():
@@ -106,13 +131,18 @@ def evaluate(predictions: list[tuple[float, float]],
             region_medians[name] = None
 
     return {
-        "median_error_px": errors[n // 2],   # PRIMARY METRIC
+        "median_error_px": errors[n // 2],
         "avg_error_px": sum(errors) / n,
         "p90_error_px": errors[int(n * 0.9)],
         "min_error_px": errors[0],
         "max_error_px": errors[-1],
         "n_test_clicks": n,
         "region_errors": region_medians,
+        "median_angle_deg": median_angle_deg,
+        "avg_angle_deg": avg_angle_deg,
+        "hit_rate_2col": hits_2col / n,
+        "hit_rate_3col": hits_3col / n,
+        "hit_rate_quadrant": hits_quadrant / n,
     }
 
 
@@ -155,6 +185,11 @@ def run_evaluation():
     print(f"min_error_px:    {metrics['min_error_px']:.1f}")
     print(f"max_error_px:    {metrics['max_error_px']:.1f}")
     print(f"n_test_clicks:   {metrics['n_test_clicks']}")
+    print(f"median_angle_deg: {metrics['median_angle_deg']:.2f}")
+    print(f"avg_angle_deg:    {metrics['avg_angle_deg']:.2f}")
+    print(f"hit_rate_2col:   {metrics['hit_rate_2col']:.1%}")
+    print(f"hit_rate_3col:   {metrics['hit_rate_3col']:.1%}")
+    print(f"hit_rate_quadrant: {metrics['hit_rate_quadrant']:.1%}")
 
     r = metrics["region_errors"]
     def _fmt(v):

@@ -37,11 +37,11 @@ class GazeDotView(NSView):
         NSColor.clearColor().set()
         NSBezierPath.fillRect_(rect)
 
-        # Soft translucent dot
+        # Translucent colorless dot (white with low opacity)
         dot = NSBezierPath.bezierPathWithOvalInRect_(
             NSMakeRect(2, 2, rect.size.width - 4, rect.size.height - 4)
         )
-        NSColor.colorWithCalibratedRed_green_blue_alpha_(0.3, 0.6, 1.0, 0.3).set()
+        NSColor.colorWithCalibratedRed_green_blue_alpha_(0.5, 0.5, 0.5, 0.15).set()
         dot.fill()
 
         # Subtle center point
@@ -49,8 +49,11 @@ class GazeDotView(NSView):
         cx = (rect.size.width - cs) / 2
         cy = (rect.size.height - cs) / 2
         center = NSBezierPath.bezierPathWithOvalInRect_(NSMakeRect(cx, cy, cs, cs))
-        NSColor.colorWithCalibratedRed_green_blue_alpha_(0.2, 0.5, 1.0, 0.5).set()
+        NSColor.colorWithCalibratedRed_green_blue_alpha_(0.5, 0.5, 0.5, 0.3).set()
         center.fill()
+
+
+OVERLAY_SMOOTHING = 0.15  # lower = smoother movement, higher = more responsive
 
 
 class GazeOverlay:
@@ -60,6 +63,8 @@ class GazeOverlay:
         self._window = None
         self._app = None
         self._screen_height = 0
+        self._smooth_x = None
+        self._smooth_y = None
 
     def start(self):
         """Create the overlay window."""
@@ -97,13 +102,26 @@ class GazeOverlay:
         self._pump()
 
     def update(self, screen_x: float, screen_y: float):
-        """Move the overlay dot to the given screen coordinates (top-left origin)."""
+        """Move the overlay dot smoothly toward the given screen coordinates (top-left origin).
+
+        The actual prediction is passed through unchanged — this only smooths
+        the visual dot position so it doesn't jump around distractingly.
+        """
         if self._window is None:
             return
 
+        # Smooth the display position (UI-only, doesn't affect predictions)
+        if self._smooth_x is None:
+            self._smooth_x = screen_x
+            self._smooth_y = screen_y
+        else:
+            s = OVERLAY_SMOOTHING
+            self._smooth_x = s * screen_x + (1 - s) * self._smooth_x
+            self._smooth_y = s * screen_y + (1 - s) * self._smooth_y
+
         # Convert from top-left origin to Cocoa bottom-left origin
-        cocoa_x = screen_x - OVERLAY_SIZE / 2
-        cocoa_y = self._screen_height - screen_y - OVERLAY_SIZE / 2
+        cocoa_x = self._smooth_x - OVERLAY_SIZE / 2
+        cocoa_y = self._screen_height - self._smooth_y - OVERLAY_SIZE / 2
 
         self._window.setFrameOrigin_((cocoa_x, cocoa_y))
         self._window.display()
