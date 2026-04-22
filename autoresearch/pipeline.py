@@ -76,27 +76,15 @@ class PipelineState:
     landmarker: FaceLandmarker
     coeffs_x: np.ndarray
     coeffs_y: np.ndarray
-    prev_gaze_x: float | None = None
-    prev_gaze_y: float | None = None
-    prev_head_yaw: float | None = None
-    prev_head_pitch: float | None = None
-    history_x: deque = None
-    history_y: deque = None
-    smoothed_x: float | None = None
-    smoothed_y: float | None = None
-
-    def __post_init__(self):
-        if self.history_x is None:
-            self.history_x = deque(maxlen=MEDIAN_WINDOW)
-        if self.history_y is None:
-            self.history_y = deque(maxlen=MEDIAN_WINDOW)
+    norm_x: tuple = None  # (mean, std) for X features
+    norm_y: tuple = None  # (mean, std) for Y features
 
 
 # ============================================================
 # Feature extraction
 # ============================================================
 
-def extract_gaze_features(frame: np.ndarray, landmarker: FaceLandmarker) -> tuple[float, float, float, float] | None:
+def extract_gaze_features(frame: np.ndarray, landmarker: FaceLandmarker) -> tuple[float, ...] | None:
     h, w = frame.shape[:2]
     rgb = frame[:, :, ::-1]
     image = mp.Image(image_format=mp.ImageFormat.SRGB, data=np.ascontiguousarray(rgb))
@@ -131,8 +119,10 @@ def extract_gaze_features(frame: np.ndarray, landmarker: FaceLandmarker) -> tupl
     rx, ry = eye_ratio(RIGHT_IRIS_CENTER, RIGHT_EYE_INNER_CORNER, RIGHT_EYE_OUTER_CORNER,
                         RIGHT_EYE_TOP, RIGHT_EYE_BOTTOM)
 
-    iris_x = max(0.0, min(1.0, (lx + rx) / 2.0))
-    iris_y = max(0.0, min(1.0, (ly + ry) / 2.0))
+    lx = max(0.0, min(1.0, lx))
+    ly = max(0.0, min(1.0, ly))
+    rx = max(0.0, min(1.0, rx))
+    ry = max(0.0, min(1.0, ry))
 
     # Head pose via solvePnP
     image_points = np.array([
@@ -151,7 +141,7 @@ def extract_gaze_features(frame: np.ndarray, landmarker: FaceLandmarker) -> tupl
 
     success, rvec, tvec = cv2.solvePnP(
         FACE_3D_MODEL, image_points, cam_matrix, dist_coeffs,
-        flags=cv2.SOLVEPNP_ITERATIVE,
+        flags=cv2.SOLVEPNP_SQPNP,
     )
 
     if not success:
@@ -161,40 +151,155 @@ def extract_gaze_features(frame: np.ndarray, landmarker: FaceLandmarker) -> tupl
         angles, _, _, _, _, _ = cv2.RQDecomp3x3(rmat)
         head_pitch, head_yaw = angles[0], angles[1]
 
-    return iris_x, iris_y, head_yaw, head_pitch
+    # Inter-pupillary distance (proxy for distance from camera)
+    left_iris = landmarks[LEFT_IRIS_CENTER]
+    right_iris = landmarks[RIGHT_IRIS_CENTER]
+    ipd = math.sqrt((left_iris.x - right_iris.x)**2 + (left_iris.y - right_iris.y)**2)
+
+    # Eye Aspect Ratio (how open the eyes are)
+    def ear(top_idx, bottom_idx, inner_idx, outer_idx):
+        top = landmarks[top_idx]
+        bottom = landmarks[bottom_idx]
+        inner = landmarks[inner_idx]
+        outer = landmarks[outer_idx]
+        v_dist = math.sqrt((top.x - bottom.x)**2 + (top.y - bottom.y)**2)
+        h_dist = math.sqrt((inner.x - outer.x)**2 + (inner.y - outer.y)**2)
+        return v_dist / h_dist if h_dist > 1e-6 else 0.3
+
+    left_ear = ear(LEFT_EYE_TOP, LEFT_EYE_BOTTOM, LEFT_EYE_INNER_CORNER, LEFT_EYE_OUTER_CORNER)
+    right_ear = ear(RIGHT_EYE_TOP, RIGHT_EYE_BOTTOM, RIGHT_EYE_INNER_CORNER, RIGHT_EYE_OUTER_CORNER)
+
+    # Absolute iris position in frame (normalized 0-1)
+    avg_iris_abs_x = (left_iris.x + right_iris.x) / 2
+    avg_iris_abs_y = (left_iris.y + right_iris.y) / 2
+
+    # Nose-eye offset: nose tip relative to midpoint between eyes
+    nose = landmarks[NOSE_TIP]
+    eye_mid_x = (landmarks[LEFT_EYE_INNER_CORNER].x + landmarks[RIGHT_EYE_INNER_CORNER].x) / 2
+    eye_mid_y = (landmarks[LEFT_EYE_INNER_CORNER].y + landmarks[RIGHT_EYE_INNER_CORNER].y) / 2
+    nose_off_x = nose.x - eye_mid_x
+    nose_off_y = nose.y - eye_mid_y
+
+    # Iris-to-nose vectors (encodes gaze relative to face structure)
+    iris_nose_lx = left_iris.x - nose.x
+    iris_nose_ly = left_iris.y - nose.y
+    iris_nose_rx = right_iris.x - nose.x
+    iris_nose_ry = right_iris.y - nose.y
+
+    return lx, ly, rx, ry, head_yaw, head_pitch, ipd, left_ear, right_ear, avg_iris_abs_x, avg_iris_abs_y, nose_off_x, nose_off_y, iris_nose_lx, iris_nose_ly, iris_nose_rx, iris_nose_ry
 
 
 # ============================================================
 # Calibration
 # ============================================================
 
-def build_feature_matrix(points: list[tuple[float, ...]]) -> np.ndarray:
+def build_feature_matrix_x(points: list[tuple[float, ...]]) -> np.ndarray:
+    """Features for predicting screen X."""
     pts = np.array(points)
     n = len(pts)
-    ix, iy = pts[:, 0], pts[:, 1]
-    hx, hy = pts[:, 2], pts[:, 3]
+    lx = pts[:, 0]
+    rx = pts[:, 2]
+    avg_x = (lx + rx) / 2
+    diff_x = lx - rx
+    hx = pts[:, 4]
+    ipd = pts[:, 6]
+    l_ear = pts[:, 7]
+    r_ear = pts[:, 8]
+    abs_x = pts[:, 9]  # absolute iris X in frame
+    nose_ox = pts[:, 11]
+    in_lx = pts[:, 13]  # iris-to-nose left x
+    in_rx = pts[:, 15]  # iris-to-nose right x
+    return np.column_stack([np.ones(n), avg_x, diff_x, hx, ipd, l_ear, r_ear, abs_x, nose_ox, in_lx, in_rx])
 
-    return np.column_stack([
-        np.ones(n),
-        ix, iy,
-        hx, hy,
-        ix * hx,
-        iy * hy,
-    ])
+
+def build_feature_matrix_y(points: list[tuple[float, ...]]) -> np.ndarray:
+    """Features for predicting screen Y."""
+    pts = np.array(points)
+    n = len(pts)
+    ly = pts[:, 1]
+    ry = pts[:, 3]
+    avg_y = (ly + ry) / 2
+    diff_y = ly - ry
+    hy = pts[:, 5]
+    ipd = pts[:, 6]
+    l_ear = pts[:, 7]
+    r_ear = pts[:, 8]
+    abs_y = pts[:, 10]  # absolute iris Y in frame
+    nose_oy = pts[:, 12]
+    in_ly = pts[:, 14]  # iris-to-nose left y
+    in_ry = pts[:, 16]  # iris-to-nose right y
+    return np.column_stack([np.ones(n), avg_y, diff_y, hy, ipd, l_ear, r_ear, abs_y, nose_oy, in_ly, in_ry])
+
+
+RIDGE_ALPHA = 0.8
+
+def _ridge_fit(A, y, alpha):
+    ATA = A.T @ A
+    reg = alpha * np.eye(ATA.shape[0])
+    return np.linalg.solve(ATA + reg, A.T @ y)
+
+
+OUTLIER_THRESHOLD = 2.0  # remove points with residual > threshold * median residual
+
+def _fit_normalized(gaze_points, screen_points):
+    """Single fit with normalization, returns coeffs and norms."""
+    Ax = build_feature_matrix_x(gaze_points)
+    Ay = build_feature_matrix_y(gaze_points)
+    mean_x = Ax[:, 1:].mean(axis=0)
+    std_x = Ax[:, 1:].std(axis=0)
+    std_x[std_x < 1e-8] = 1.0
+    Ax_norm = Ax.copy()
+    Ax_norm[:, 1:] = (Ax[:, 1:] - mean_x) / std_x
+
+    mean_y = Ay[:, 1:].mean(axis=0)
+    std_y = Ay[:, 1:].std(axis=0)
+    std_y[std_y < 1e-8] = 1.0
+    Ay_norm = Ay.copy()
+    Ay_norm[:, 1:] = (Ay[:, 1:] - mean_y) / std_y
+
+    screen = np.array(screen_points)
+    coeffs_x = _ridge_fit(Ax_norm, screen[:, 0], RIDGE_ALPHA)
+    coeffs_y = _ridge_fit(Ay_norm, screen[:, 1], RIDGE_ALPHA)
+    return coeffs_x, coeffs_y, (mean_x, std_x), (mean_y, std_y)
 
 
 def fit_calibration(gaze_points, screen_points):
-    A = build_feature_matrix(gaze_points)
-    screen = np.array(screen_points)
-    coeffs_x, _, _, _ = np.linalg.lstsq(A, screen[:, 0], rcond=None)
-    coeffs_y, _, _, _ = np.linalg.lstsq(A, screen[:, 1], rcond=None)
-    return coeffs_x, coeffs_y
+    cur_gaze = list(gaze_points)
+    cur_screen = list(screen_points)
+
+    for _ in range(2):  # iterative outlier rejection
+        coeffs_x, coeffs_y, norm_x, norm_y = _fit_normalized(cur_gaze, cur_screen)
+
+        # Compute residuals
+        screen_arr = np.array(cur_screen)
+        residuals = []
+        for i, gp in enumerate(cur_gaze):
+            px, py = calibration_predict(gp, coeffs_x, coeffs_y, norm_x, norm_y)
+            err = math.sqrt((px - screen_arr[i, 0])**2 + (py - screen_arr[i, 1])**2)
+            residuals.append(err)
+        residuals = np.array(residuals)
+        median_res = np.median(residuals)
+
+        mask = residuals <= OUTLIER_THRESHOLD * median_res
+        if mask.sum() >= MIN_CALIBRATION_POINTS:
+            cur_gaze = [gp for gp, m in zip(cur_gaze, mask) if m]
+            cur_screen = [sp for sp, m in zip(cur_screen, mask) if m]
+        else:
+            break
+
+    coeffs_x, coeffs_y, norm_x, norm_y = _fit_normalized(cur_gaze, cur_screen)
+    return coeffs_x, coeffs_y, norm_x, norm_y
 
 
-def calibration_predict(gaze_features, coeffs_x, coeffs_y):
-    features = build_feature_matrix([gaze_features])
-    sx = float((features @ coeffs_x)[0])
-    sy = float((features @ coeffs_y)[0])
+def calibration_predict(gaze_features, coeffs_x, coeffs_y, norm_x, norm_y):
+    mean_x, std_x = norm_x
+    mean_y, std_y = norm_y
+    fx = build_feature_matrix_x([gaze_features])
+    fy = build_feature_matrix_y([gaze_features])
+    fx[:, 1:] = (fx[:, 1:] - mean_x) / std_x
+    fy[:, 1:] = (fy[:, 1:] - mean_y) / std_y
+    sx = float((fx @ coeffs_x)[0])
+    sy = float((fy @ coeffs_y)[0])
     return sx, sy
 
 
@@ -276,33 +381,27 @@ def replay_calibration(frames_dir: str, calibration_clicks: list[dict]) -> Pipel
             f"(need {MIN_CALIBRATION_POINTS}). Record more data."
         )
 
-    coeffs_x, coeffs_y = fit_calibration(gaze_points, screen_points)
+    coeffs_x, coeffs_y, norm_x, norm_y = fit_calibration(gaze_points, screen_points)
 
     return PipelineState(
         landmarker=landmarker,
         coeffs_x=coeffs_x,
         coeffs_y=coeffs_y,
+        norm_x=norm_x,
+        norm_y=norm_y,
     )
 
 
 def predict(frame: np.ndarray, state: PipelineState) -> tuple[float, float]:
     features = extract_gaze_features(frame, state.landmarker)
     if features is None:
-        if state.smoothed_x is not None:
-            return state.smoothed_x, state.smoothed_y
         return SCREEN_W / 2, SCREEN_H / 2
 
-    iris_x, iris_y, head_yaw, head_pitch = features
-
-    iris_x, iris_y, head_yaw, head_pitch = apply_gaze_smoothing(
-        iris_x, iris_y, head_yaw, head_pitch, state)
-
     raw_x, raw_y = calibration_predict(
-        (iris_x, iris_y, head_yaw, head_pitch), state.coeffs_x, state.coeffs_y)
+        features, state.coeffs_x, state.coeffs_y,
+        state.norm_x, state.norm_y)
 
-    smooth_x, smooth_y = apply_screen_smoothing(raw_x, raw_y, state)
-
-    final_x = max(0.0, min(SCREEN_W, smooth_x))
-    final_y = max(0.0, min(SCREEN_H, smooth_y))
+    final_x = max(0.0, min(SCREEN_W, raw_x))
+    final_y = max(0.0, min(SCREEN_H, raw_y))
 
     return final_x, final_y
